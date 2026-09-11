@@ -180,6 +180,31 @@
   width: 100% !important;
 }
 
+/* Search examples read as compact choices rather than another instruction
+   sentence. They remain normal Shiny action links and keep visible focus. */
+.vr-example-pill {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--bs-primary) 30%, white);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--bs-primary) 8%, white);
+  color: var(--bs-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.vr-example-pill:hover,
+.vr-example-pill:focus-visible {
+  background-color: color-mix(in srgb, var(--bs-primary) 15%, white);
+  color: var(--bs-primary);
+}
+
+/* Ordinary content links remain visibly link-like. Button links, example pills,
+   and header source links keep their purpose-specific treatments. */
+.card-body a:not(.btn):not(.vr-example-pill):not(.shiny-download-link) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Tint card headers with a soft wash of the brand primary so they stand out
    from the card body while staying on-theme. color-mix keeps it derived from
    the theme; the hex above it is a fallback for older browsers. */
