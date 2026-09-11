@@ -148,10 +148,10 @@
     description = "Jump out to the source databases for the gene and variant."
   ),
   list(
-    el = "tour_chat",
+    el = "chat_toggle",
     title = "AI assistant",
     description = paste(
-      "Ask about the loaded gene or variant here. Open <b>Model &amp; key</b>,",
+      "Open the assistant here, then open <b>Model &amp; key</b>,",
       "connect a provider (a key in the environment is used automatically),",
       "then type a question or click one of the example prompts. The assistant",
       "can read these cards and load new genes/variants for you."
@@ -192,7 +192,13 @@ vr_demo_modal <- function(example_label) {
     tags$hr(),
     tags$p(tags$strong("Using the AI assistant")),
     tags$ol(
-      tags$li("Open ", tags$strong("Model & key"), " on the chat panel."),
+      tags$li(
+        "Open ",
+        tags$strong("Assistant"),
+        ", then ",
+        tags$strong("Model & key"),
+        "."
+      ),
       tags$li(
         "Connect a provider. An environment key is used automatically,",
         " otherwise paste your own (kept only in this session)."
@@ -222,10 +228,9 @@ vr_demo_tour <- function() {
     if (s$el %in% off_anchors) {
       next
     }
-    # Every card (and the chat panel) is highlighted by its header only, so the
-    # spotlight stays compact; the search box has no header, so it's highlighted
-    # whole (showing the filled inputs and the Review button).
-    use_header <- !identical(s$el, "tour_search")
+    # Every result card is highlighted by its header. The search box and floating
+    # Assistant button have no card header, so they are highlighted directly.
+    use_header <- !(s$el %in% c("tour_search", "chat_toggle"))
     guide$step(
       el = if (use_header) paste0("#", s$el, " .card-header") else s$el,
       title = s$title,

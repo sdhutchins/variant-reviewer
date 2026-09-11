@@ -17,6 +17,32 @@ test_that("app launches with the search controls present", {
   expect_no_error(app$get_value(input = "search-gene"))
   expect_no_error(app$get_value(input = "search-gene_variant"))
   expect_no_error(app$get_value(input = "search-variant"))
+
+  # The assistant starts hidden, opens from the floating button, and keeps its
+  # mounted input state when closed and reopened.
+  expect_false(app$get_js(
+    "document.getElementById('tour_chat').classList.contains('show')"
+  ))
+  provider <- app$get_value(input = "chat-provider")
+  app$get_js("document.getElementById('chat_toggle').click()")
+  app$wait_for_js(
+    "document.getElementById('tour_chat').classList.contains('show')"
+  )
+  expect_true(app$get_js(
+    "document.getElementById('tour_chat').classList.contains('show')"
+  ))
+  app$get_js("document.getElementById('chat_toggle').click()")
+  app$wait_for_js(
+    paste(
+      "!document.getElementById('tour_chat').classList.contains('show') &&",
+      "!document.getElementById('tour_chat').classList.contains('collapsing')"
+    )
+  )
+  app$get_js("document.getElementById('chat_toggle').click()")
+  app$wait_for_js(
+    "document.getElementById('tour_chat').classList.contains('show')"
+  )
+  expect_identical(app$get_value(input = "chat-provider"), provider)
 })
 
 test_that("searching a gene populates the gene summary card", {

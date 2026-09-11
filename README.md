@@ -209,10 +209,10 @@ The dashboard includes an optional chat assistant
 variant you are reviewing. The assistant uses a bring-your-own-key (BYOK)
 model. To connect it:
 
-1. Open the chat's **Model & key** drawer. Use the gear button in the chat
-   header.
-2. Pick a provider: Google Gemini, OpenAI, or Anthropic.
-3. Paste your own API key.
+1. Open the floating **Assistant** button.
+2. Open the chat's **Model & key** drawer using the gear button in its header.
+3. Pick a provider: Google Gemini, OpenAI, or Anthropic.
+4. Paste your own API key.
 
 The app holds your key only in the server memory for your session. It never
 writes the key to disk. When you paste the key, the app loads the models that
