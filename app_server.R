@@ -205,14 +205,14 @@ function(input, output, session) {
     search_effective,
     variant_annotation
   )
-  clinvar_data <- clinvar_server("clinvar", variant_rsid)
+  clinvar_data <- clinvar_server("clinvar", variant_clinvar_id)
   # gnomad_server() also returns its retry-bump function, so the ancestry card
   # below -- which renders this same result rather than fetching its own --
   # can wire its own refresh button to retry it too.
-  gnomad_result <- gnomad_server("gnomad", variant_rsid)
+  gnomad_result <- gnomad_server("gnomad", variant_genomic_id)
   gnomad_data <- gnomad_result$data
   constraint_data <- gene_constraint_server("constraint", resolved)
-  ensembl_data <- ensembl_server("ensembl", variant_rsid)
+  ensembl_data <- ensembl_server("ensembl", variant_genomic_id, variant_rsid)
   gtex_data <- gtex_expression_server("gtex", resolved)
   string_data <- string_ppi_server("string_ppi", resolved)
   opentargets_data <- opentargets_server("opentargets", resolved)
@@ -348,13 +348,19 @@ function(input, output, session) {
     ),
     list(
       id = "variant",
-      label = "MyVariant annotation",
+      label = "ProtVar/MyVariant annotation",
       variant = TRUE,
       get = variant_annotation
     ),
     list(
+      id = "protvar_predictions",
+      label = "ProtVar predictions",
+      variant = TRUE,
+      get = protvar_predictions_data
+    ),
+    list(
       id = "predictions",
-      label = "In-silico predictions",
+      label = "Additional in-silico predictions",
       variant = TRUE,
       get = predictions_data
     ),
@@ -428,6 +434,7 @@ function(input, output, session) {
     pharmacogenomics = "pharmacogenomics",
     literature = "literature",
     variant = "variant_summary",
+    protvar_predictions = "protvar_predictions",
     predictions = "predictions",
     protein = "protein_summary",
     clinvar = "clinvar",

@@ -2,31 +2,23 @@
 # the variant.
 
 gnomad_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Population frequency (gnomAD)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "120px"
-    ))
-  )
+  vr_result_card(id, "Population frequency (gnomAD)", "120px", copy = TRUE)
 }
 
-# rsid: reactive() -> dbSNP rsID string (or NULL when none is available).
+# identifier: reactive() -> normalized genomic variant ID or dbSNP rsID.
 #
 # Returns list(data, retry): `data` is the frequency reactive, exactly as
 # before; `retry` is this card's retry-bump function, exposed so the gnomAD
 # ancestry card -- which renders this same fetch rather than making its own --
 # can also retry it from its own header button (see gnomad_ancestry_server()).
-gnomad_server <- function(id, rsid) {
+gnomad_server <- function(id, identifier) {
   moduleServer(id, function(input, output, session) {
     retry <- vr_retry_counter()
     vr_card_refresh_observer(input, retry$bump)
 
     frequency <- reactive({
       retry$dep()
-      id_value <- rsid()
+      id_value <- identifier()
       if (is_blank(id_value)) {
         return(NULL)
       }
@@ -40,32 +32,29 @@ gnomad_server <- function(id, rsid) {
     })
 
     output$content <- renderUI({
-      res <- frequency()
-      if (is.null(res)) {
-        return(vr_empty(
-          "Enter a variant (rsID or HGVS) to see gnomAD frequencies."
-        ))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      link <- tags$a(
-        href = paste0(
-          "https://gnomad.broadinstitute.org/variant/",
-          res$variant_id,
-          "?dataset=",
-          res$dataset
-        ),
-        target = "_blank",
-        rel = "noopener noreferrer",
-        res$variant_id
-      )
-      tagList(
-        tags$p(class = "mb-2", tags$strong("Variant: "), link),
-        gnomad_part_ui("Exome", res$exome),
-        gnomad_part_ui("Genome", res$genome),
-        if (is.null(res$exome) && is.null(res$genome)) {
-          vr_empty("No allele-frequency data for this variant.")
+      vr_result_ui(
+        frequency(),
+        "Enter a variant (rsID or HGVS) to see gnomAD frequencies.",
+        function(res) {
+          link <- tags$a(
+            href = paste0(
+              "https://gnomad.broadinstitute.org/variant/",
+              res$variant_id,
+              "?dataset=",
+              res$dataset
+            ),
+            target = "_blank",
+            rel = "noopener noreferrer",
+            res$variant_id
+          )
+          tagList(
+            tags$p(class = "mb-2", tags$strong("Variant: "), link),
+            gnomad_part_ui("Exome", res$exome),
+            gnomad_part_ui("Genome", res$genome),
+            if (is.null(res$exome) && is.null(res$genome)) {
+              vr_empty("No allele-frequency data for this variant.")
+            }
+          )
         }
       )
     })

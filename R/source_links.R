@@ -181,11 +181,27 @@ src_alphafold <- function(uniprot) {
   }
 }
 
-src_ensembl_variant <- function(rsid) {
-  if (is_blank(rsid)) {
+src_ensembl_variant <- function(identifier) {
+  if (is_blank(identifier)) {
     NULL
+  } else if (grepl("^[^-]+-[0-9]+-[ACGT]+-[ACGT]+$", identifier)) {
+    parts <- strsplit(identifier, "-", fixed = TRUE)[[1]]
+    paste0(
+      "https://rest.ensembl.org/vep/human/region/",
+      parts[[1]],
+      ":",
+      parts[[2]],
+      "-",
+      parts[[2]],
+      ":1/",
+      parts[[4]],
+      "?content-type=application/json"
+    )
   } else {
-    paste0("https://www.ensembl.org/Homo_sapiens/Variation/Explore?v=", rsid)
+    paste0(
+      "https://www.ensembl.org/Homo_sapiens/Variation/Explore?v=",
+      identifier
+    )
   }
 }
 

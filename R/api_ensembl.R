@@ -3,21 +3,35 @@
 
 ENSEMBL_BASE <- "https://rest.ensembl.org"
 
-# Run VEP for a variant id (rsID).
+# Run VEP for a dbSNP rsID or ProtVar's normalized GRCh38 variant ID.
 # Returns:
 #   list(ok = TRUE, most_severe, assembly,
 #        data = data.frame(gene, transcript, consequence, impact, sift, polyphen))
 #   list(ok = FALSE, error = "...")
-ensembl_vep <- function(rsid) {
-  if (is_blank(rsid)) {
-    return(list(ok = FALSE, error = "No rsID available for VEP lookup."))
+ensembl_vep <- function(identifier, rsid = NULL) {
+  if (is_blank(identifier)) {
+    return(list(ok = FALSE, error = "No variant identifier for VEP lookup."))
+  }
+
+  parts <- strsplit(identifier, "-", fixed = TRUE)[[1]]
+  is_variant_id <- length(parts) == 4 &&
+    grepl("^[0-9]+$", parts[[2]]) &&
+    grepl("^[ACGT]+$", parts[[4]], ignore.case = TRUE)
+  path <- if (is_variant_id && !is_blank(rsid)) {
+    paste0("vep/human/id/", rsid)
+  } else if (is_variant_id) {
+    region <- paste0(parts[[1]], ":", parts[[2]], "-", parts[[2]], ":1")
+    paste0("vep/human/region/", region, "/", parts[[4]])
+  } else {
+    paste0("vep/human/id/", identifier)
   }
 
   res <- vr_api_get(
     ENSEMBL_BASE,
-    path = paste0("vep/human/id/", rsid),
+    path = path,
     query = list(`content-type` = "application/json"),
-    source = "Ensembl VEP"
+    source = "Ensembl VEP",
+    timeout = if (is_variant_id && is_blank(rsid)) 30 else 15
   )
   if (!res$ok) {
     return(list(ok = FALSE, error = res$error))
@@ -26,15 +40,51 @@ ensembl_vep <- function(rsid) {
   if (is.null(records) || length(records) == 0) {
     return(list(
       ok = FALSE,
-      error = paste0("Ensembl VEP has no record for ", rsid, ".")
+      error = paste0("Ensembl VEP has no record for ", identifier, ".")
     ))
   }
 
-  ensembl_parse_vep(records[[1]])
+  if (is_variant_id) {
+    chromosome <- parts[[1]]
+    position <- suppressWarnings(as.integer(parts[[2]]))
+    matching <- Filter(
+      function(record) {
+        identical(
+          as.character(pluck_at(record, "seq_region_name")),
+          chromosome
+        ) &&
+          identical(
+            suppressWarnings(as.integer(pluck_at(record, "start"))),
+            position
+          )
+      },
+      records
+    )
+    if (length(matching) > 0) {
+      records <- matching
+    }
+  }
+  ensembl_parse_vep(
+    records[[1]],
+    alt_allele = if (is_variant_id) parts[[4]] else NULL
+  )
 }
 
 # Pure parser: a VEP record -> normalized result.
-ensembl_parse_vep <- function(record) {
+ensembl_parse_vep <- function(record, alt_allele = NULL) {
+  consequences <- pluck_at(record, "transcript_consequences")
+  if (!is_blank(alt_allele) && length(consequences) > 0) {
+    allele_matches <- vapply(
+      consequences,
+      function(consequence) {
+        allele <- pluck_at(consequence, "variant_allele")
+        is_blank(allele) ||
+          identical(toupper(as.character(allele)), toupper(alt_allele))
+      },
+      logical(1)
+    )
+    consequences <- consequences[allele_matches]
+  }
   list(
     ok = TRUE,
     most_severe = pluck_at(
@@ -43,7 +93,7 @@ ensembl_parse_vep <- function(record) {
       default = NA_character_
     ),
     assembly = pluck_at(record, "assembly_name", default = NA_character_),
-    data = ensembl_consequences_df(pluck_at(record, "transcript_consequences"))
+    data = ensembl_consequences_df(consequences)
   )
 }
 

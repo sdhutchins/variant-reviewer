@@ -1,24 +1,31 @@
-# gnomAD client: population allele frequencies for a variant, looked up by
-# rsID (avoids hg19/hg38 coordinate mismatches). GraphQL API:
+# gnomAD client: population allele frequencies for a variant, looked up by an
+# rsID or normalized GRCh38 allele. GraphQL API:
 # https://gnomad.broadinstitute.org/api
 
 GNOMAD_URL <- "https://gnomad.broadinstitute.org/api"
 GNOMAD_DATASET <- "gnomad_r4"
 
-# Allele frequencies for an rsID.
+# Allele frequencies for an rsID or normalized GRCh38 variant ID.
 # Returns:
 #   list(ok = TRUE, variant_id, dataset, exome = list(af, ac, an)|NULL,
 #        genome = list(af, ac, an)|NULL)
 #   list(ok = FALSE, error = "...")
-gnomad_frequency <- function(rsid, dataset = GNOMAD_DATASET) {
-  if (is_blank(rsid)) {
-    return(list(ok = FALSE, error = "No rsID available for gnomAD lookup."))
+gnomad_frequency <- function(identifier, dataset = GNOMAD_DATASET) {
+  if (is_blank(identifier)) {
+    return(list(ok = FALSE, error = "No variant identifier for gnomAD lookup."))
   }
+
+  is_variant_id <- grepl(
+    "^[^[:space:]-]+-[0-9]+-[ACGT]+-[ACGT]+$",
+    identifier,
+    ignore.case = TRUE
+  )
+  argument <- if (is_variant_id) "variantId" else "rsid"
 
   query <- sprintf(
     paste(
-      "query($rsid: String!) {",
-      "  variant(rsid: $rsid, dataset: %s) {",
+      "query($identifier: String!) {",
+      "  variant(%s: $identifier, dataset: %s) {",
       "    variant_id",
       "    exome { af ac an populations { id ac an } }",
       "    genome { af ac an populations { id ac an } }",
@@ -26,12 +33,13 @@ gnomad_frequency <- function(rsid, dataset = GNOMAD_DATASET) {
       "}",
       sep = "\n"
     ),
+    argument,
     dataset
   )
 
   res <- vr_api_post_json(
     GNOMAD_URL,
-    body = list(query = query, variables = list(rsid = rsid)),
+    body = list(query = query, variables = list(identifier = identifier)),
     source = "gnomAD"
   )
   if (!res$ok) {
@@ -45,7 +53,7 @@ gnomad_frequency <- function(rsid, dataset = GNOMAD_DATASET) {
   if (is.null(variant)) {
     return(list(
       ok = FALSE,
-      error = paste0("gnomAD has no record for ", rsid, ".")
+      error = paste0("gnomAD has no record for ", identifier, ".")
     ))
   }
 
