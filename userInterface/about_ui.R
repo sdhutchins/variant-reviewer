@@ -13,18 +13,26 @@
   ),
   list(
     "Variant annotation",
-    "MyVariant.info",
-    "rsID, HGVS protein change, CADD deleteriousness score, and ClinVar significance."
+    "ProtVar and MyVariant.info",
+    paste(
+      "Normalized genomic and protein change, gene, consequence, rsID,",
+      "and ClinVar significance."
+    )
   ),
   list(
-    "In-silico predictions",
+    "ProtVar predictions",
+    "ProtVar (EMBL-EBI)",
+    "AlphaMissense, CADD, ESM-1b, FoldX, and Missense3D for the selected substitution."
+  ),
+  list(
+    "Additional in-silico predictions",
     "dbNSFP (MyVariant.info)",
-    "REVEL, AlphaMissense, CADD, PolyPhen-2, SIFT, and MetaLR/SVM pathogenicity scores."
+    "Additional REVEL, PolyPhen-2, SIFT, and MetaLR/SVM prediction scores."
   ),
   list(
     "Protein context",
     "ProtVar (EMBL-EBI)",
-    "Protein-level functional and structural context for the variant."
+    "Protein function and catalogued substitutions at the selected residue."
   ),
   list(
     "Protein domains & features",
@@ -107,11 +115,169 @@
   )
 }
 
+about_annotations_table_data <- function() {
+  data.frame(
+    Annotation = vapply(.about_annotations, `[[`, character(1), 1),
+    Source = vapply(.about_annotations, `[[`, character(1), 2),
+    `What it shows` = vapply(.about_annotations, `[[`, character(1), 3),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+# Versions here describe what the code explicitly selects. "Provider current"
+# is intentional when an upstream service updates data behind an unversioned
+# endpoint, because claiming a frozen release would be misleading.
+.about_provenance <- list(
+  list(
+    "ProtVar",
+    "API 2.0",
+    paste(
+      "Data 2.1; UniProt 2025_01; Ensembl 113; CADD v1.7;",
+      "popEVE 2025.03; Missense3D 2026.02; dbSNP b156; COSMIC v103;",
+      "ClinVar 2025-02; gnomAD v4.1.0"
+    ),
+    "https://www.ebi.ac.uk/ProtVar/api/swagger-ui/index.html",
+    "https://www.ebi.ac.uk/ProtVar/about"
+  ),
+  list(
+    "MyGene.info",
+    "REST API v3",
+    "Provider current; not pinned by the API route",
+    "https://docs.mygene.info/en/latest/"
+  ),
+  list(
+    "MyVariant.info",
+    "REST API v1",
+    "Provider current; not pinned by the API route",
+    "https://docs.myvariant.info/en/latest/"
+  ),
+  list(
+    "ClinVar",
+    "NCBI E-utilities",
+    "Live ClinVar records; not pinned",
+    "https://www.ncbi.nlm.nih.gov/books/NBK25500/"
+  ),
+  list(
+    "UniProt",
+    "EBI Proteins API",
+    "Provider current; not pinned by the API route",
+    "https://www.ebi.ac.uk/proteins/api/doc/"
+  ),
+  list(
+    "AlphaFold DB",
+    "AlphaFold DB API",
+    "Latest model version returned for each accession",
+    "https://alphafold.ebi.ac.uk/api-docs"
+  ),
+  list(
+    "gnomAD",
+    "GraphQL API",
+    "gnomAD v4 dataset (gnomad_r4); GRCh38 constraint",
+    "https://gnomad.broadinstitute.org/help/whats-new"
+  ),
+  list(
+    "GTEx",
+    "REST API v2",
+    "GTEx v8 (gtex_v8)",
+    "https://gtexportal.org/api/v2/redoc"
+  ),
+  list(
+    "Ensembl",
+    "Ensembl REST API",
+    "Provider current; GRCh38; release not pinned",
+    "https://rest.ensembl.org/documentation"
+  ),
+  list(
+    "STRING",
+    "STRING API",
+    "Provider current; human taxonomy 9606",
+    "https://string-db.org/help/api/"
+  ),
+  list(
+    "Open Targets",
+    "GraphQL API v4",
+    "Provider current Platform release; not pinned",
+    "https://platform-docs.opentargets.org/data-access/graphql-api"
+  ),
+  list(
+    "Monarch Initiative",
+    "REST API v3",
+    "Provider current knowledge graph; not pinned",
+    "https://api.monarchinitiative.org/v3/docs"
+  ),
+  list(
+    "Europe PMC",
+    "REST web service",
+    "Provider current; response version supplied by Europe PMC",
+    "https://europepmc.org/RestfulWebService"
+  )
+)
+
+.about_provenance_row <- function(entry) {
+  tags$tr(
+    tags$td(tags$strong(entry[[1]])),
+    tags$td(entry[[2]]),
+    tags$td(class = "text-muted", entry[[3]]),
+    tags$td(
+      tags$a(
+        href = entry[[4]],
+        target = "_blank",
+        rel = "noopener",
+        "Documentation"
+      ),
+      if (length(entry) >= 5) {
+        tagList(
+          " · ",
+          tags$a(
+            href = entry[[5]],
+            target = "_blank",
+            rel = "noopener",
+            "Release notes"
+          )
+        )
+      }
+    )
+  )
+}
+
+about_provenance_table_data <- function() {
+  data.frame(
+    Source = vapply(.about_provenance, `[[`, character(1), 1),
+    API = vapply(.about_provenance, `[[`, character(1), 2),
+    `Data release used` = vapply(.about_provenance, `[[`, character(1), 3),
+    Documentation = vapply(.about_provenance, `[[`, character(1), 4),
+    `Release notes` = vapply(
+      .about_provenance,
+      function(entry) if (length(entry) >= 5) entry[[5]] else "",
+      character(1)
+    ),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
+.about_card_header <- function(title, copy = FALSE, download_id = NULL) {
+  card_header(
+    class = "d-flex justify-content-between align-items-center gap-2",
+    tags$h2(title, class = "h6 mb-0"),
+    if (isTRUE(copy) || !is.null(download_id)) {
+      tags$div(
+        class = "d-flex align-items-center gap-2",
+        if (isTRUE(copy)) vr_copy_button(paste("Copy", title, "text")),
+        if (!is.null(download_id)) {
+          vr_csv_button(download_id, paste("Download", title, "as CSV"))
+        }
+      )
+    }
+  )
+}
+
 about_page <- tagList(
   layout_columns(
     col_widths = 12,
     card(
-      card_header("Overview"),
+      .about_card_header("Overview", copy = TRUE),
       card_body(
         tags$p(
           "Variant Reviewer is a lightweight gene and variant interpretation ",
@@ -135,7 +301,7 @@ about_page <- tagList(
   layout_columns(
     col_widths = 12,
     card(
-      card_header("Scope"),
+      .about_card_header("Scope", copy = TRUE),
       card_body(
         layout_columns(
           col_widths = c(6, 6),
@@ -179,7 +345,10 @@ about_page <- tagList(
   layout_columns(
     col_widths = 12,
     card(
-      card_header("Annotations available"),
+      .about_card_header(
+        "Annotations available",
+        download_id = "about_annotations_download"
+      ),
       card_body(
         tags$table(
           class = "table table-sm align-middle mb-0",
@@ -200,7 +369,7 @@ about_page <- tagList(
   layout_columns(
     col_widths = 12,
     card(
-      card_header("Input validation"),
+      .about_card_header("Input validation", copy = TRUE),
       card_body(
         tags$p(
           "Before any external API is queried, the gene symbol and variant you ",
@@ -215,8 +384,11 @@ about_page <- tagList(
           tags$em("pattern"),
           " mode: a fast, reproducible, network-free grammar check. Gene ",
           "symbols are checked against the HGNC symbol grammar and rsIDs against ",
-          "the dbSNP grammar; other variant forms (HGVS, protein shorthand such ",
-          "as R175H) are passed through for the annotation API to resolve."
+          "the dbSNP grammar. ProtVar then resolves HGVS, VCF fields, genomic ",
+          "coordinates, UniProt protein notation, and gnomAD, dbSNP, ClinVar, ",
+          "or COSMIC identifiers to one normalized variant record. Genomic ",
+          "alleles are reported as GRCh38 RefSeq HGVS, such as ",
+          "NC_000006.12:g.13305184G>A."
         ),
         tags$p(
           class = "mb-0",
@@ -224,7 +396,40 @@ about_page <- tagList(
           "lookup is ever fired on an obviously bad identifier. This applies ",
           "both to what you type and to what the assistant loads. It is a ",
           "format check, not an existence check: whether the identifier actually ",
-          "exists is confirmed by the resolving services (MyGene, MyVariant)."
+          "exists is confirmed by the resolving services (MyGene and ProtVar)."
+        )
+      )
+    )
+  ),
+  layout_columns(
+    col_widths = 12,
+    card(
+      .about_card_header(
+        "Data provenance and versions",
+        download_id = "about_provenance_download"
+      ),
+      card_body(
+        tags$p(
+          "This table records the API contract and data release selected by ",
+          "the app. Provider-current services can change upstream without a ",
+          "code change, so they are identified as unpinned rather than given ",
+          "a potentially stale release number."
+        ),
+        tags$div(
+          class = "table-responsive",
+          tags$table(
+            class = paste(
+              "table table-sm align-middle mb-0",
+              "vr-provenance-table"
+            ),
+            tags$thead(tags$tr(
+              tags$th("Source"),
+              tags$th("API"),
+              tags$th("Data release used"),
+              tags$th("Reference")
+            )),
+            tags$tbody(lapply(.about_provenance, .about_provenance_row))
+          )
         )
       )
     )
@@ -232,7 +437,7 @@ about_page <- tagList(
   layout_columns(
     col_widths = c(6, 6),
     card(
-      card_header("Data sources & privacy"),
+      .about_card_header("Data sources & privacy", copy = TRUE),
       card_body(
         tags$p(
           "All data sources are public and require no API key. Queries are ",
@@ -256,7 +461,7 @@ about_page <- tagList(
       )
     ),
     card(
-      card_header("About this build"),
+      .about_card_header("About this build", copy = TRUE),
       card_body(
         vr_field("Version", app_version()),
         tags$p(

@@ -1,5 +1,18 @@
 # Shiny Server
 function(input, output, session) {
+  vr_csv_download(
+    output,
+    "about_annotations_download",
+    reactive(about_annotations_table_data()),
+    "annotation-sources.csv"
+  )
+  vr_csv_download(
+    output,
+    "about_provenance_download",
+    reactive(about_provenance_table_data()),
+    "data-provenance.csv"
+  )
+
   # Search requested by the assistant. The search module fills its inputs from
   # this and runs its own submit, so the assistant drives the search box rather
   # than writing the query (or any card) itself.
