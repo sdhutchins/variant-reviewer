@@ -115,9 +115,9 @@ about_page <- tagList(
       card_body(
         tags$p(
           "Variant Reviewer is a lightweight gene and variant interpretation ",
-          "companion. Enter a gene symbol, a variant, or both (the box ",
-          "suggests the gene's known pathogenic variants as you type). A ",
-          "variant on its own resolves its gene, so the dashboard pulls ",
+          "companion. Start with a gene symbol and optionally select one of ",
+          "its notable variants, or enter a variant directly. A variant ",
+          "resolves its gene, so the dashboard pulls ",
           "together, in one place, what the gene does, where it is expressed, ",
           "what it interacts with, and protein- and clinical-level context for ",
           "the variant."
@@ -144,7 +144,7 @@ about_page <- tagList(
             tags$ul(
               class = "mb-0",
               tags$li(
-                "Reviews one human gene, one variant, or both at a time."
+                "Reviews one human gene and optionally one variant at a time."
               ),
               tags$li(
                 "Aggregates public annotations, read-only, onto one dashboard."

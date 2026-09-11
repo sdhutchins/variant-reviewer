@@ -5,9 +5,12 @@
 By [Samuel Bharti](https://www.samuelbharti.com)
 
 Variant Reviewer is a Shiny app that helps you interpret a gene or a variant.
-Enter a gene symbol, a variant, or both. The dashboard then shows what the gene
-does, where the body expresses it, what it interacts with, and protein-level
-context for the variant. If you enter only a variant, the app finds its gene.
+Choose whether to start with a gene symbol or a variant. A gene search can also
+include a variant selected from the gene's notable variants. The dashboard then
+shows what the gene does, where the body expresses it, what it interacts with,
+and protein-level context for the variant. When you enter only a variant, the
+app finds its gene and asks you to choose when the entry matches multiple
+alleles.
 
 The app is a reactive front end over several public bioinformatics APIs:
 
@@ -230,7 +233,7 @@ formats their output.
   predictions, protein, landscape, conservation, domains, structure, clinvar,
   gnomad, constraint, genemodel, consequences, expression, interactions,
   diseases, phenotypes, drugs, pharmacogenomics, and literature.
-- `set_selection`: enters a gene, a variant, or both into the search box, then
+- `set_selection`: enters a gene or variant into the search box, then
   clicks Review. This is the same as typing the search by hand.
 
 The assistant can read all of this data. It can change only one thing: the

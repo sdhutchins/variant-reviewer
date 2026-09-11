@@ -16,7 +16,7 @@
     el = "tour_search",
     title = "1. Search",
     description = paste(
-      "We've filled in <b>BRAF V600E (rs113488022)</b> for you. Click",
+      "We've filled in <b>BRAF V600E</b> for you. Click",
       "<b>Review</b> to load it, then use <b>Next</b> to walk through the cards",
       "below as they populate."
     )
