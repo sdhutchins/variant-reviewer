@@ -484,6 +484,11 @@ function(input, output, session) {
     if (!nzchar(gene) && !nzchar(variant)) {
       return("No gene or variant provided; nothing was searched.")
     }
+    # The visible search modes are mutually exclusive. Prefer a supplied
+    # variant because it can resolve its own gene for the gene-level cards.
+    if (nzchar(variant)) {
+      gene <- ""
+    }
     # Same format-level gate the search box uses, so the assistant can't fire
     # lookups on a malformed identifier either.
     check <- vr_validate_query(
@@ -503,11 +508,10 @@ function(input, output, session) {
       nonce = search_counter()
     ))
     paste0(
-      "Searched ",
-      gene,
-      if (nzchar(variant)) paste0(" / ", variant) else "",
-      " in the search box. The cards are refreshing; read them (read_card) to",
-      " see the results."
+      "Entered ",
+      if (nzchar(variant)) variant else gene,
+      " in the search box. A unique match refreshes the cards; multiple ",
+      "matches require the user to select the exact variant."
     )
   }
 
@@ -528,14 +532,9 @@ function(input, output, session) {
       "visible_cards",
       selected = .dashboard_cards_default_on
     )
-    updateTextInput(session, "search-gene", value = ex$gene)
-    updateSelectizeInput(
-      session,
-      "search-variant",
-      choices = stats::setNames(ex$variant, ex$variant),
-      selected = ex$variant,
-      server = FALSE
-    )
+    updateRadioButtons(session, "search-input_type", selected = "variant")
+    updateTextInput(session, "search-gene", value = "")
+    updateTextInput(session, "search-variant", value = ex$variant)
     # Fill the search inputs but do NOT submit: the walkthrough asks the user to
     # click Review themselves. Its first step highlights the search box, and
     # driver.js keeps the highlighted element interactive, so Review is clickable
@@ -583,9 +582,9 @@ function(input, output, session) {
       ellmer::tool(
         function(gene = NULL, variant = NULL) load_selection(gene, variant),
         paste(
-          "Type a human gene and/or variant into the app's search box and click",
-          "Review, exactly as the user would. Provide a gene, a variant, or",
-          "both; a variant on its own resolves its own gene. The app runs its",
+          "Type a human gene or variant into the app's search box and click",
+          "Review, exactly as the user would. A variant resolves its own gene.",
+          "The app runs its",
           "own lookups and the cards refresh on their own. This is the only way",
           "you can change the dashboard; you cannot write to a card. Do not",
           "perform your own external searches; always search here and read the",

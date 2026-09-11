@@ -41,7 +41,8 @@ shiny::testServer(app_dir, {
   # model), not just the demo's default-on subset.
   session$setInputs(
     visible_cards = names(.dashboard_cards),
-    `search-gene` = .gene_search_example$gene,
+    `search-input_type` = "variant",
+    `search-gene` = "",
     `search-variant` = .gene_search_example$variant,
     `search-submit` = 1
   )
