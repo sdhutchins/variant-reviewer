@@ -1,0 +1,51 @@
+{
+  "content": {
+    "inputs": [
+      {
+        "derivedGenomicVariants": [
+          {
+            "chromosome": "7",
+            "position": 140753337,
+            "refBase": "C",
+            "altBase": "A",
+            "genes": [
+              {
+                "caddScore": 25.1,
+                "isoforms": [
+                  {
+                    "accession": "P15056",
+                    "isoformPosition": 600,
+                    "variantAA": "Leu"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "chromosome": "7",
+            "position": 140753337,
+            "refBase": "C",
+            "altBase": "G",
+            "genes": [
+              {
+                "caddScore": 25.1,
+                "isoforms": [
+                  {
+                    "accession": "P15056",
+                    "isoformPosition": 600,
+                    "variantAA": "Leu"
+                  },
+                  {
+                    "accession": "H7C560",
+                    "isoformPosition": 600,
+                    "variantAA": "Leu"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

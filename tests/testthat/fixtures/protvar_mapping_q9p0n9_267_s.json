@@ -1,0 +1,105 @@
+{
+  "content": {
+    "inputs": [
+      {
+        "originalIndex": 0,
+        "inputStr": "NP_001305738.1:p.Pro267Ser",
+        "format": "HGVS_PROTEIN",
+        "type": "PROTEIN",
+        "messages": [],
+        "derivedGenomicVariants": [
+          {
+            "chromosome": "6",
+            "position": 13305184,
+            "refBase": "G",
+            "altBase": "A",
+            "genes": [
+              {
+                "ensg": "ENSG00000145979.18",
+                "reverseStrand": true,
+                "geneName": "TBC1D7",
+                "refAllele": "G",
+                "altAllele": "A",
+                "isoforms": [
+                  {
+                    "accession": "Q9P0N9",
+                    "canonical": true,
+                    "canonicalAccession": "Q9P0N9",
+                    "isoformPosition": 267,
+                    "refCodon": "Ccc",
+                    "codonPosition": 1,
+                    "refAA": "Pro",
+                    "variantAA": "Ser",
+                    "variantCodon": "Ucc",
+                    "consequences": "missense",
+                    "proteinName": "TBC1 domain family member 7",
+                    "transcripts": [
+                      {
+                        "enst": "ENST00000606214.5",
+                        "ensp": "ENSP00000475727.1",
+                        "ense": "ENSE00003697651"
+                      }
+                    ],
+                    "populationObservationsUri": "/population/Q9P0N9/267?genomicVariant=6-13305184-G-A",
+                    "referenceFunctionUri": "/function/Q9P0N9/267?variantAA=SER",
+                    "proteinStructureUri": "/structure/Q9P0N9/267",
+                    "amScore": {
+                      "type": "AM",
+                      "amPathogenicity": 0.7085,
+                      "amClass": "PATHOGENIC"
+                    },
+                    "codonChange": "Ccc/Ucc",
+                    "aminoAcidChange": "Pro/Ser"
+                  },
+                  {
+                    "accession": "Q9P0N9-4",
+                    "canonical": false,
+                    "canonicalAccession": "Q9P0N9",
+                    "isoformPosition": 221,
+                    "refAA": "Pro",
+                    "variantAA": "Ser",
+                    "consequences": "missense"
+                  },
+                  {
+                    "accession": "Q9P0N9-2",
+                    "canonical": false,
+                    "canonicalAccession": "Q9P0N9",
+                    "isoformPosition": 240,
+                    "refAA": "Pro",
+                    "variantAA": "Ser",
+                    "consequences": "missense"
+                  },
+                  {
+                    "accession": "Q9P0N9-1",
+                    "canonical": false,
+                    "canonicalAccession": "Q9P0N9",
+                    "isoformPosition": 267,
+                    "refAA": "Pro",
+                    "variantAA": "Ser",
+                    "consequences": "missense"
+                  }
+                ],
+                "caddScore": 27.5
+              }
+            ],
+            "variantKey": "6:13305184"
+          }
+        ],
+        "accession": "Q9P0N9",
+        "position": 267,
+        "refAA": "P",
+        "altAA": "S",
+        "altUnknown": false,
+        "refseqId": "NP_001305738.1"
+      }
+    ],
+    "messages": []
+  },
+  "page": 1,
+  "pageSize": 1,
+  "assembly": "AUTO",
+  "totalItems": 1,
+  "totalPages": 1,
+  "totalCap": null,
+  "last": true
+}
