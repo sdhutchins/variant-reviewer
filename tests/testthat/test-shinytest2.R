@@ -12,8 +12,11 @@ test_that("app launches with the search controls present", {
   )
   withr::defer(app$stop())
 
-  # The search module mounts a gene input and a submit button.
+  # Both mode-specific input regions mount, with CSS showing the selected one.
+  expect_no_error(app$get_value(input = "search-input_type"))
   expect_no_error(app$get_value(input = "search-gene"))
+  expect_no_error(app$get_value(input = "search-gene_variant"))
+  expect_no_error(app$get_value(input = "search-variant"))
 })
 
 test_that("searching a gene populates the gene summary card", {

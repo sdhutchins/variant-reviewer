@@ -1,13 +1,12 @@
-# Gene-first search box. Returns a reactive carrying the submitted query so the
-# parent can fan it out to the result modules.
+# Gene-or-variant search box. Returns a reactive carrying the submitted query so
+# the parent can fan it out to the result modules.
 
-# A coherent, well-supported example (BRAF V600E) that populates every card:
-# the gene resolves, and the rsID drives the variant, ClinVar, gnomAD, and VEP
-# lookups. Shared by the UI label and the server handler.
+# A coherent, well-supported example (BRAF V600E) that populates every card. Its
+# genomic HGVS identifies the V600E allele precisely, without the other alleles
+# sharing its rsID. Shared by the UI label and the server handler.
 .gene_search_example <- list(
   label = "BRAF V600E",
-  gene = "BRAF",
-  variant = "rs113488022"
+  variant = "chr7:g.140453136A>T"
 )
 
 gene_search_ui <- function(id) {
@@ -15,32 +14,58 @@ gene_search_ui <- function(id) {
 
   card(
     card_body(
+      radioButtons(
+        ns("input_type"),
+        label = "Search by",
+        choices = c("Gene" = "gene", "Variant" = "variant"),
+        selected = "gene",
+        inline = TRUE
+      ),
       layout_columns(
-        col_widths = c(5, 4, 3),
-        textInput(
-          ns("gene"),
-          label = "Gene symbol",
-          placeholder = "e.g. TP53",
-          width = "100%"
-        ),
-        # Variant picker: suggestions are pathogenic/likely-pathogenic variants
-        # for the entered gene (populated server-side), but any rsID/HGVS can be
-        # typed (create = TRUE), so it doubles as a free-text field.
-        selectizeInput(
-          ns("variant"),
-          label = "Variant",
-          choices = NULL,
-          multiple = FALSE,
-          width = "100%",
-          options = list(
-            create = TRUE,
-            placeholder = "e.g. V600E, R175H, or rs113488022",
-            onInitialize = I('function() { this.setValue(""); }'),
-            render = I(
-              "{ option_create: function(data, escape) {
-                 return '<div class=\"create\">Use \"' + escape(data.input) +
-                   '\"</div>'; } }"
-            )
+        col_widths = c(9, 3),
+        div(
+          conditionalPanel(
+            condition = sprintf("input['%s'] === 'gene'", ns("input_type")),
+            layout_columns(
+              col_widths = c(7, 5),
+              textInput(
+                ns("gene"),
+                label = "Gene symbol",
+                placeholder = "e.g. TP53",
+                width = "100%"
+              ),
+              selectizeInput(
+                ns("gene_variant"),
+                label = "Variant (optional)",
+                choices = NULL,
+                multiple = FALSE,
+                width = "100%",
+                options = list(
+                  create = TRUE,
+                  placeholder = "Select or enter a variant",
+                  onInitialize = I('function() { this.setValue(""); }'),
+                  render = I(
+                    "{ option_create: function(data, escape) {
+                       return '<div class=\"create\">Use \"' +
+                         escape(data.input) + '\"</div>'; } }"
+                  )
+                )
+              )
+            ),
+            uiOutput(ns("gene_variant_hint"))
+          ),
+          conditionalPanel(
+            condition = sprintf(
+              "input['%s'] === 'variant'",
+              ns("input_type")
+            ),
+            textInput(
+              ns("variant"),
+              label = "Variant",
+              placeholder = "e.g. rs113488022 or chr7:g.140453136A>T",
+              width = "100%"
+            ),
+            uiOutput(ns("variant_match_ui"))
           )
         ),
         div(
@@ -53,11 +78,9 @@ gene_search_ui <- function(id) {
           )
         )
       ),
-      # Either field is enough: a gene, a variant (rsID or HGVS), or both. A
-      # lone variant resolves its own gene to fill the gene-level cards.
       tags$div(
         class = "small text-muted",
-        "Enter a gene, a variant (rsID or HGVS), or both."
+        "Choose a gene symbol or enter a variant (rsID or HGVS)."
       ),
       # One-click example so a first-time visitor can see a populated dashboard
       # without knowing a gene/variant off-hand.
@@ -69,8 +92,6 @@ gene_search_ui <- function(id) {
           paste0("Load an example (", .gene_search_example$label, ")")
         )
       ),
-      # Count of variant suggestions loaded for the current gene.
-      uiOutput(ns("variant_hint")),
       # Inline validation feedback: shown when the gene/variant fails the
       # format check, in which case no search is submitted.
       uiOutput(ns("validation"))
@@ -94,44 +115,44 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
     query <- reactiveVal(NULL)
     # Validation messages from the last submit (character vector), or NULL.
     validation <- reactiveVal(NULL)
-    # Parsed variant suggestions for the current gene, or NULL.
-    suggestions <- reactiveVal(NULL)
+    # Multiple genomic records matching the current variant entry, or NULL.
+    variant_matches <- reactiveVal(NULL)
+    # Parsed gene-level suggestions used for the count beneath the inputs.
+    gene_variant_suggestions <- reactiveVal(NULL)
 
-    # Update the variant selectize's choices while preserving whatever the user
-    # has already typed/selected (kept as an extra option so it stays visible
-    # even when it isn't among the suggestions).
-    refresh_variant_choices <- function(choices = character()) {
-      current <- isolate(input$variant) %||% ""
+    # Update the gene-mode variant choices while preserving a custom value the
+    # user has already typed.
+    refresh_gene_variant_choices <- function(choices = character()) {
+      current <- isolate(input$gene_variant) %||% ""
       if (nzchar(current) && !(current %in% choices)) {
         choices <- c(stats::setNames(current, current), choices)
       }
       updateSelectizeInput(
         session,
-        "variant",
+        "gene_variant",
         choices = choices,
         selected = if (nzchar(current)) current else "",
         server = FALSE
       )
     }
 
-    # Prefetch this gene's notable variants when the gene field settles, so the
-    # variant box can suggest them. Debounced to avoid firing mid-typing, and
-    # gated on the same format check used at submit so we never query on junk.
+    # Restore the original gene-driven list of notable variants. Debouncing
+    # avoids querying while the user is still typing.
     gene_debounced <- debounce(reactive(trimws(input$gene %||% "")), 600)
     observeEvent(gene_debounced(), {
       gene <- gene_debounced()
       if (!isTRUE(vr_validate_gene(gene)$ok)) {
-        suggestions(NULL)
-        refresh_variant_choices()
+        gene_variant_suggestions(NULL)
+        refresh_gene_variant_choices()
         return()
       }
       parsed <- myvariant_gene_variants(gene)
-      suggestions(parsed)
-      refresh_variant_choices(myvariant_variant_choices(parsed))
+      gene_variant_suggestions(parsed)
+      refresh_gene_variant_choices(myvariant_variant_choices(parsed))
     })
 
-    output$variant_hint <- renderUI({
-      parsed <- suggestions()
+    output$gene_variant_hint <- renderUI({
+      parsed <- gene_variant_suggestions()
       if (is.null(parsed) || !isTRUE(parsed$ok)) {
         return(NULL)
       }
@@ -139,7 +160,7 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       tags$div(
         class = "small text-muted mt-1",
         sprintf(
-          "%d known pathogenic/likely-pathogenic variant%s for %s. Type to filter, or enter any rsID/HGVS.",
+          "%d known pathogenic/likely-pathogenic variant%s for %s.",
           n,
           if (n == 1) "" else "s",
           trimws(input$gene %||% "")
@@ -147,6 +168,37 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       )
     })
 
+    output$variant_match_ui <- renderUI({
+      resolved <- variant_matches()
+      if (is.null(resolved) || nrow(resolved$matches) <= 1) {
+        return(NULL)
+      }
+      tagList(
+        selectInput(
+          session$ns("variant_match"),
+          "Select the matching variant",
+          choices = c(
+            "Choose a match" = "",
+            stats::setNames(resolved$matches$id, resolved$matches$label)
+          ),
+          selected = "",
+          width = "100%"
+        ),
+        tags$div(
+          class = "small text-muted",
+          "This entry matches more than one genomic allele."
+        )
+      )
+    })
+
+    # Hide a previous match list as soon as the user changes the variant text.
+    observeEvent(input$variant, {
+      resolved <- variant_matches()
+      if (!is.null(resolved) &&
+          !identical(trimws(input$variant %||% ""), resolved$term)) {
+        variant_matches(NULL)
+      }
+    }, ignoreInit = TRUE)
     # The one place a query is published. Gates every downstream API call on a
     # format-level check of the inputs, so a malformed gene/variant is caught
     # here rather than firing failing lookups across the cards.
@@ -165,8 +217,53 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       invisible(TRUE)
     }
 
+    resolve_variant <- function(variant) {
+      previous <- variant_matches()
+      if (!is.null(previous) && identical(previous$term, variant)) {
+        selected <- trimws(input$variant_match %||% "")
+        if (!nzchar(selected)) {
+          validation("Select one of the matching variants.")
+          query(NULL)
+          return(invisible(FALSE))
+        }
+        updateTextInput(session, "variant", value = selected)
+        variant_matches(NULL)
+        return(submit_query("", selected))
+      }
+
+      check <- vr_validate_variant(variant)
+      if (!isTRUE(check$ok)) {
+        validation(check$error)
+        query(NULL)
+        return(invisible(FALSE))
+      }
+      resolved <- myvariant_find_matches(variant)
+      if (!isTRUE(resolved$ok)) {
+        validation(resolved$error)
+        query(NULL)
+        return(invisible(FALSE))
+      }
+      if (nrow(resolved$matches) == 1) {
+        variant_matches(NULL)
+        return(submit_query("", variant))
+      }
+      resolved$term <- variant
+      variant_matches(resolved)
+      validation(NULL)
+      query(NULL)
+      invisible(FALSE)
+    }
+
     observeEvent(input$submit, {
-      submit_query(trimws(input$gene %||% ""), trimws(input$variant %||% ""))
+      input_type <- input$input_type %||% "gene"
+      if (identical(input_type, "variant")) {
+        resolve_variant(trimws(input$variant %||% ""))
+      } else {
+        submit_query(
+          trimws(input$gene %||% ""),
+          trimws(input$gene_variant %||% "")
+        )
+      }
     })
 
     # An outside request (the assistant) fills the search box and then goes
@@ -180,19 +277,29 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       }
       gene <- trimws(as.character(req$gene %||% ""))
       variant <- trimws(as.character(req$variant %||% ""))
+      input_type <- if (nzchar(variant)) "variant" else "gene"
+      if (identical(input_type, "variant")) {
+        gene <- ""
+      }
+      updateRadioButtons(session, "input_type", selected = input_type)
       updateTextInput(session, "gene", value = gene)
       updateSelectizeInput(
         session,
-        "variant",
-        choices = if (nzchar(variant)) {
-          stats::setNames(variant, variant)
-        } else {
-          character()
-        },
-        selected = variant,
+        "gene_variant",
+        choices = character(),
+        selected = "",
         server = FALSE
       )
-      submit_query(gene, variant)
+      updateTextInput(
+        session,
+        "variant",
+        value = variant
+      )
+      if (identical(input_type, "variant")) {
+        resolve_variant(variant)
+      } else {
+        submit_query(gene, "")
+      }
     })
 
     output$validation <- renderUI({
@@ -207,21 +314,14 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       )
     })
 
-    # Fill the inputs with the example values but leave submitting to the user,
-    # so they can review or tweak the gene/variant before clicking Review. The
-    # gene change also triggers the suggestion prefetch above.
+    # Fill the variant input with the example but leave submitting to the user,
+    # so they can review or change it before clicking Review. Variant mode
+    # matches the worked example loaded by the navbar Demo.
     observeEvent(input$example, {
-      updateTextInput(session, "gene", value = .gene_search_example$gene)
-      updateSelectizeInput(
-        session,
-        "variant",
-        choices = stats::setNames(
-          .gene_search_example$variant,
-          .gene_search_example$variant
-        ),
-        selected = .gene_search_example$variant,
-        server = FALSE
-      )
+      updateRadioButtons(session, "input_type", selected = "variant")
+      updateTextInput(session, "gene", value = "")
+      updateTextInput(session, "variant", value = .gene_search_example$variant)
+      variant_matches(NULL)
     })
 
     query

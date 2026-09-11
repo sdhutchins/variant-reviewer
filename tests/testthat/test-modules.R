@@ -6,10 +6,69 @@ test_that("gene_search_server is NULL before submit, emits the query after", {
     # show their placeholder messages.
     expect_null(session$returned())
 
-    session$setInputs(gene = "TP53", variant = "R175H", submit = 1)
+    session$setInputs(
+      input_type = "gene",
+      gene = "TP53",
+      variant = "R175H",
+      submit = 1
+    )
     query <- session$returned()
     expect_equal(query$gene, "TP53")
+    expect_null(query$variant)
+  })
+})
+
+test_that("gene_search_server submits only the selected input type", {
+  original <- myvariant_find_matches
+  myvariant_find_matches <<- function(variant, ...) {
+    list(
+      ok = TRUE,
+      matches = data.frame(id = "chr17:g.7675088C>T", label = "TP53 | R175H")
+    )
+  }
+  on.exit(myvariant_find_matches <<- original, add = TRUE)
+
+  testServer(gene_search_server, {
+    session$setInputs(
+      input_type = "variant",
+      gene = "TP53",
+      variant = "R175H",
+      submit = 1
+    )
+    query <- session$returned()
+    expect_equal(query$gene, "")
     expect_equal(query$variant, "R175H")
+  })
+})
+
+test_that("gene_search_server asks the user to resolve multiple matches", {
+  original <- myvariant_find_matches
+  myvariant_find_matches <<- function(variant, ...) {
+    list(
+      ok = TRUE,
+      matches = data.frame(
+        id = c("chr7:g.140453136A>G", "chr7:g.140453136A>T"),
+        label = c("BRAF | p.V600A", "BRAF | p.V600E")
+      )
+    )
+  }
+  on.exit(myvariant_find_matches <<- original, add = TRUE)
+
+  testServer(gene_search_server, {
+    session$setInputs(
+      input_type = "variant",
+      variant = "rs113488022",
+      submit = 1
+    )
+    expect_null(session$returned())
+    match_html <- paste(as.character(output$variant_match_ui), collapse = " ")
+    expect_match(match_html, "p.V600E")
+
+    session$setInputs(
+      variant_match = "chr7:g.140453136A>T",
+      submit = 2
+    )
+    expect_equal(session$returned()$variant, "chr7:g.140453136A>T")
   })
 })
 
@@ -29,29 +88,26 @@ test_that("gene_search_server example click fills inputs but does not submit", {
   })
 })
 
-test_that("gene_search_server prefetches variant suggestions for the gene", {
-  # Stub the network lookup so the debounced prefetch runs offline.
-  orig <- myvariant_gene_variants
+test_that("gene_search_server loads variant suggestions for a valid gene", {
+  original <- myvariant_gene_variants
   myvariant_gene_variants <<- function(symbol, ...) {
     list(
       ok = TRUE,
       variants = data.frame(
-        rsid = "rs1",
+        rsid = "rs113488022",
         label = "V600E",
         significance = "Pathogenic",
-        cadd = 30,
-        stringsAsFactors = FALSE
+        cadd = 32
       )
     )
   }
-  on.exit(myvariant_gene_variants <<- orig, add = TRUE)
+  on.exit(myvariant_gene_variants <<- original, add = TRUE)
 
   testServer(gene_search_server, {
-    session$setInputs(gene = "BRAF")
-    session$elapse(700) # advance past the 600ms debounce
-    hint <- paste(as.character(output$variant_hint), collapse = " ")
-    expect_match(hint, "known pathogenic")
-    expect_match(hint, "BRAF")
+    session$setInputs(input_type = "gene", gene = "BRAF")
+    session$elapse(700)
+    hint_html <- paste(as.character(output$gene_variant_hint), collapse = " ")
+    expect_match(hint_html, "1 known pathogenic")
   })
 })
 
@@ -59,13 +115,22 @@ test_that("an outside request runs through the same submit as a Review click", {
   # The assistant hands the module a request; the module fills its inputs and
   # submits, so the query comes out exactly as if the user had clicked Review.
   requested <- reactiveVal(NULL)
+  original <- myvariant_find_matches
+  myvariant_find_matches <<- function(variant, ...) {
+    list(
+      ok = TRUE,
+      matches = data.frame(id = "chr7:g.140453136A>T", label = "BRAF | p.V600E")
+    )
+  }
+  on.exit(myvariant_find_matches <<- original, add = TRUE)
+
   testServer(gene_search_server, args = list(requested = requested), {
     expect_null(session$returned())
 
     requested(list(gene = "BRAF", variant = "rs113488022", nonce = 1L))
     session$flushReact()
     query <- session$returned()
-    expect_equal(query$gene, "BRAF")
+    expect_equal(query$gene, "")
     expect_equal(query$variant, "rs113488022")
   })
 })
