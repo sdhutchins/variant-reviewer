@@ -8,9 +8,9 @@ function(input, output, session) {
   # Submitted search query: reactive(list(gene, variant)) or NULL.
   search <- gene_search_server("search", requested = assistant_search)
 
-  # Raw MyVariant annotation for the entered variant. Shared so the fetch runs
-  # once; the card-facing variant_annotation below gates it on the gene and
-  # variant being consistent.
+  # Optional MyVariant enrichment for ProtVar's normalized genomic HGVS. Shared
+  # so the fetch runs once; ProtVar still supplies the variant card when this
+  # secondary source has no matching record.
   #
   # annotation_retry: the Variant card has no fetch of its own (it just
   # renders variant_annotation directly), so its refresh button bumps this to
@@ -21,20 +21,29 @@ function(input, output, session) {
   # cached result) and usually exactly what you want, since a failed
   # MyVariant fetch would have been the reason they were empty too.
   annotation_retry <- vr_retry_counter()
+  protvar_metadata <- reactive({
+    annotation_retry$dep()
+    query <- search()
+    if (is.null(query) || is.null(query$protvar)) {
+      return(NULL)
+    }
+    protvar_variant_metadata(query$protvar)
+  })
   annotation_raw <- reactive({
     annotation_retry$dep()
     query <- search()
     if (is.null(query) || is_blank(query$variant)) {
       return(NULL)
     }
-    myvariant_annotate(query$variant)
+    normalized <- query$protvar$normalized_hgvs %||% NA_character_
+    term <- if (is_blank(normalized)) query$variant else normalized
+    myvariant_annotate(term)
   })
 
   # Work out which gene the dashboard is about and whether the inputs conflict.
   # A search can be gene-only, variant-only, or both:
   #   * gene present            -> that is the gene.
-  #   * variant only            -> the gene the variant belongs to (from
-  #                                MyVariant), so a lone variant still fills the
+  #   * variant only            -> the gene ProtVar mapped, so a lone variant fills the
   #                                gene-level cards.
   #   * both, naming different genes -> a mismatch, which blocks the search.
   gene_context <- reactive({
@@ -45,7 +54,10 @@ function(input, output, session) {
     has_gene <- !is_blank(query$gene)
     has_variant <- !is_blank(query$variant)
     ann <- if (has_variant) annotation_raw() else NULL
-    variant_gene <- if (isTRUE(ann$ok)) ann$gene else NULL
+    variant_gene <- query$protvar$gene %||% NULL
+    if (is_blank(variant_gene) && isTRUE(ann$ok)) {
+      variant_gene <- ann$gene
+    }
     mismatch <- has_gene &&
       has_variant &&
       !is_blank(variant_gene) &&
@@ -91,11 +103,24 @@ function(input, output, session) {
 
   # Variant annotation for the variant cards. NULL on a mismatch.
   variant_annotation <- reactive({
-    if (is.null(ok_context())) NULL else annotation_raw()
+    if (is.null(ok_context())) {
+      return(NULL)
+    }
+    query <- search()
+    if (is_blank(query$variant)) {
+      return(NULL)
+    }
+    protvar_variant_annotation(
+      query$protvar,
+      query$variant,
+      annotation_raw(),
+      protvar_metadata()
+    )
   })
 
-  # The dbSNP rsID drives the gnomAD and ClinVar lookups: use the input directly
-  # when it is an rsID, otherwise the one MyVariant resolved.
+  # The dbSNP rsID drives services that do not accept ProtVar's normalized
+  # allele. Use the input directly when it is an rsID, otherwise use the one
+  # recovered from the selected mapping.
   variant_rsid <- reactive({
     ctx <- ok_context()
     if (is.null(ctx) || !ctx$has_variant) {
@@ -105,11 +130,29 @@ function(input, output, session) {
     if (grepl("^rs[0-9]+$", variant, ignore.case = TRUE)) {
       return(tolower(variant))
     }
-    annotation <- annotation_raw()
+    annotation <- variant_annotation()
     if (isTRUE(annotation$ok) && !is_blank(annotation$rsid)) {
       return(annotation$rsid)
     }
     NULL
+  })
+
+  # Prefer ProtVar's allele-specific ClinVar accession. One rsID can describe
+  # several alternate alleles, so using it first can retrieve a different
+  # clinical record from the one the user selected.
+  variant_clinvar_id <- reactive({
+    protvar_clinvar_lookup_id(variant_annotation())
+  })
+
+  # A genomic allele is unambiguous when one rsID names multiple variants, so
+  # gnomAD receives ProtVar's normalized GRCh38 variant ID whenever available.
+  variant_genomic_id <- reactive({
+    query <- search_effective()
+    if (!is.null(query) && !is_blank(query$protvar$genomic)) {
+      query$protvar$genomic
+    } else {
+      variant_rsid()
+    }
   })
 
   # Block, rather than just warn, when a typed gene and the variant disagree: the

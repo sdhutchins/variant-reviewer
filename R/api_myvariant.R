@@ -22,82 +22,27 @@ myvariant_query_term <- function(variant) {
   if (grepl(":", term, fixed = TRUE)) sprintf('"%s"', term) else term
 }
 
-# Resolve an rsID or HGVS entry to the distinct genomic records MyVariant
-# returns. This is separate from annotation so the search UI can ask the user to
-# choose an allele instead of silently taking the first hit when a term is
-# ambiguous.
-myvariant_find_matches <- function(variant, size = 100) {
-  if (!myvariant_is_queryable(variant)) {
-    return(list(
-      ok = FALSE,
-      error = "Enter an rsID (rs...) or HGVS to find a matching variant."
-    ))
+# Choose a stable protein change from MyVariant's per-transcript array. The
+# modal residue number usually represents the canonical change, while the
+# shortest notation makes ties readable (for example p.V600E over p.Val600Glu).
+myvariant_representative_hgvsp <- function(values) {
+  changes <- unique(as.character(unlist(values, use.names = FALSE)))
+  changes <- changes[!is.na(changes) & nzchar(changes)]
+  if (length(changes) == 0) {
+    return(NA_character_)
   }
-  term <- trimws(as.character(variant))
-  res <- vr_api_get(
-    MYVARIANT_BASE,
-    path = "query",
-    query = list(
-      q = myvariant_query_term(term),
-      size = size,
-      fields = "dbsnp.rsid,dbnsfp.genename,dbnsfp.hgvsp"
-    ),
-    source = "MyVariant"
-  )
-  if (!res$ok) {
-    return(list(ok = FALSE, error = res$error))
+  positions <- regmatches(changes, regexpr("[0-9]+", changes))
+  counts <- table(positions[nzchar(positions)])
+  candidates <- if (length(counts) == 0) {
+    changes
+  } else {
+    changes[positions == names(counts)[which.max(counts)]]
   }
-  myvariant_parse_matches(res$data$hits, term)
-}
-
-# Pure parser for variant-search matches. The genomic HGVS id distinguishes
-# alleles that share an rsID; gene and protein change provide readable context.
-myvariant_parse_matches <- function(hits, term = NA_character_) {
-  if (is.null(hits) || length(hits) == 0) {
-    return(list(
-      ok = FALSE,
-      error = paste0("No annotation found for '", term, "'.")
-    ))
-  }
-  rows <- lapply(hits, function(hit) {
-    id <- pluck_at(hit, "_id")
-    if (is_blank(id)) {
-      return(NULL)
-    }
-    gene <- mygene_first(pluck_at(hit, "dbnsfp", "genename"))
-    protein_changes <- unique(as.character(unlist(
-      pluck_at(hit, "dbnsfp", "hgvsp"),
-      use.names = FALSE
-    )))
-    protein_changes <- protein_changes[!is.na(protein_changes) &
-      nzchar(protein_changes)]
-    protein <- if (length(protein_changes) == 0) {
-      NA_character_
-    } else {
-      protein_changes[[which.min(nchar(protein_changes))]]
-    }
-    label_parts <- c(id, gene, protein)
-    label_parts <- label_parts[!is.na(label_parts) & nzchar(label_parts)]
-    data.frame(
-      id = id,
-      label = paste(label_parts, collapse = " | "),
-      stringsAsFactors = FALSE
-    )
-  })
-  rows <- do.call(rbind, rows)
-  if (is.null(rows) || nrow(rows) == 0) {
-    return(list(
-      ok = FALSE,
-      error = paste0("No annotation found for '", term, "'.")
-    ))
-  }
-  rows <- rows[!duplicated(rows$id), , drop = FALSE]
-  rownames(rows) <- NULL
-  list(ok = TRUE, matches = rows)
+  candidates[[which.min(nchar(candidates))]]
 }
 
 # Returns:
-#   list(ok = TRUE, id, rsid, gene, hgvsp, cadd_phred, clinvar_significance)
+#   list(ok = TRUE, id, rsid, gene, hgvsp, clinvar_significance)
 #   list(ok = FALSE, error = "...")
 myvariant_annotate <- function(variant) {
   if (is_blank(variant)) {
@@ -121,7 +66,6 @@ myvariant_annotate <- function(variant) {
         "dbsnp.rsid",
         "dbnsfp.genename",
         "dbnsfp.hgvsp",
-        "cadd.phred",
         "clinvar.rcv.clinical_significance",
         sep = ","
       )
@@ -149,15 +93,14 @@ myvariant_parse_hit <- function(hit, term = NA_character_) {
     id = pluck_at(hit, "_id", default = term),
     rsid = mygene_first(pluck_at(hit, "dbsnp", "rsid")),
     gene = mygene_first(pluck_at(hit, "dbnsfp", "genename")),
-    hgvsp = mygene_first(pluck_at(hit, "dbnsfp", "hgvsp")),
-    cadd_phred = pluck_at(hit, "cadd", "phred", default = NA),
+    hgvsp = myvariant_representative_hgvsp(pluck_at(hit, "dbnsfp", "hgvsp")),
     clinvar_significance = myvariant_clinvar_sig(hit)
   )
 }
 
-# In-silico pathogenicity predictions for a variant, from dbNSFP (+ CADD) via
-# MyVariant. Same query style as myvariant_annotate(), so it resolves the same
-# hit. Returns:
+# Additional in-silico pathogenicity predictions from dbNSFP via MyVariant.
+# AlphaMissense and CADD are intentionally omitted because ProtVar is the app's
+# primary source for those scores. Returns:
 #   list(ok = TRUE, predictions = list(list(name, score, call), ...))
 #   list(ok = FALSE, error = "...")
 myvariant_predictions <- function(variant) {
@@ -178,9 +121,7 @@ myvariant_predictions <- function(variant) {
       q = myvariant_query_term(term),
       size = 1,
       fields = paste(
-        "cadd.phred",
         "dbnsfp.revel",
-        "dbnsfp.alphamissense",
         "dbnsfp.sift",
         "dbnsfp.polyphen2",
         "dbnsfp.metalr",
@@ -206,11 +147,6 @@ myvariant_predictions <- function(variant) {
 # dbNSFP prediction-code dictionaries (per predictor). Codes come as a scalar or
 # a per-transcript array; the parser collapses them to one representative call.
 .mv_pred_maps <- list(
-  alphamissense = c(
-    P = "likely pathogenic",
-    B = "likely benign",
-    A = "ambiguous"
-  ),
   polyphen2 = c(D = "probably damaging", P = "possibly damaging", B = "benign"),
   sift = c(D = "deleterious", T = "tolerated"),
   meta = c(D = "damaging", T = "tolerated")
@@ -241,7 +177,6 @@ myvariant_predictions <- function(variant) {
 myvariant_parse_predictions <- function(hit) {
   d <- pluck_at(hit, "dbnsfp")
   revel <- .mv_max_num(pluck_at(d, "revel", "score"))
-  cadd <- .mv_max_num(pluck_at(hit, "cadd", "phred"))
   entries <- list(
     list(
       name = "REVEL",
@@ -252,23 +187,6 @@ myvariant_parse_predictions <- function(hit) {
         "damaging-leaning"
       } else {
         "benign-leaning"
-      }
-    ),
-    list(
-      name = "AlphaMissense",
-      score = .mv_max_num(pluck_at(d, "alphamissense", "score")),
-      call = .mv_call(
-        pluck_at(d, "alphamissense", "pred"),
-        .mv_pred_maps$alphamissense
-      )
-    ),
-    list(
-      name = "CADD (phred)",
-      score = cadd,
-      call = if (!is.na(cadd) && cadd >= 20) {
-        "top ~1% deleterious"
-      } else {
-        NA_character_
       }
     ),
     list(
