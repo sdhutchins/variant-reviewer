@@ -1,6 +1,6 @@
 # Guided demo walkthrough.
 #
-# The navbar "Demo" button loads a worked example (BRAF V600E), then runs this
+# The navbar "Demo" button loads a worked TBC1D7 Pro267Ser example, then runs this
 # {cicerone} tour: it highlights the search box, steps through each result card
 # explaining what it shows, and finishes on the AI assistant. The step elements
 # are the `tour_*` anchor ids added in userInterface/dashboard_ui.R and ui.R.
@@ -16,7 +16,7 @@
     el = "tour_search",
     title = "1. Search",
     description = paste(
-      "We've filled in <b>BRAF V600E</b> for you. Click",
+      "We've filled in <b>TBC1D7 Pro267Ser</b> for you. Click",
       "<b>Review</b> to load it, then use <b>Next</b> to walk through the cards",
       "below as they populate."
     )
@@ -30,8 +30,8 @@
     el = "tour_variant_summary",
     title = "Variant",
     description = paste(
-      "The variant's annotation: dbSNP, clinical significance, and scores",
-      "(MyVariant)."
+      "ProtVar's normalized allele and protein change, enriched with dbSNP",
+      "and ClinVar identifiers."
     )
   ),
   list(
@@ -59,9 +59,17 @@
     )
   ),
   list(
+    el = "tour_protvar_predictions",
+    title = "ProtVar predictions",
+    description = paste(
+      "AlphaMissense, CADD, ESM-1b, FoldX, and Missense3D for the selected",
+      "substitution."
+    )
+  ),
+  list(
     el = "tour_predictions",
-    title = "In-silico predictions",
-    description = "Computational pathogenicity predictions for the variant."
+    title = "Additional predictions",
+    description = "Nonduplicate prediction scores supplied through MyVariant."
   ),
   list(
     el = "tour_constraint",

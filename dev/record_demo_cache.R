@@ -6,7 +6,7 @@
 #   Rscript dev/record_demo_cache.R
 #
 # It needs a live network. It drives the real app server (via shiny::testServer)
-# for BRAF V600E with every card visible, so the requests it makes -- and
+# for the current worked example with every card visible, so its requests and
 # therefore the cache keys it records -- are exactly the ones the running app
 # makes. Nothing here reconstructs calls by hand, so the snapshot cannot drift
 # out of step with what the modules actually fetch. The result is written to
@@ -30,7 +30,7 @@ Sys.setenv(VR_DEMO_SNAPSHOT_OUT = out_file)
 
 library(shiny)
 
-message("Recording demo cache for BRAF V600E from live APIs...")
+message("Recording demo cache for the current example from live APIs...")
 
 shiny::testServer(app_dir, {
   # Start from an empty cache so the snapshot holds only the demo's requests.

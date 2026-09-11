@@ -32,11 +32,47 @@ test_that("gene and variant summaries include the key fields", {
     rsid = "rs113488022",
     gene = "BRAF",
     hgvsp = "p.Val600Glu",
-    cadd_phred = 32,
     clinvar_significance = "Pathogenic"
   )
   expect_match(vr_chat_variant(variant), "rs113488022")
   expect_match(vr_chat_variant(variant), "Pathogenic")
+})
+
+test_that("protein and ProtVar prediction summaries stay separate", {
+  variants <- data.frame(
+    wild_type = "Val",
+    change = "Glu",
+    amino_acid = "E",
+    sources = "ClinVar",
+    stringsAsFactors = FALSE
+  )
+  variants$genomic <- list("7-140753336-A-T")
+  text <- vr_chat_protein(list(
+    ok = TRUE,
+    accession = "P15056",
+    position = 600,
+    function_text = NA_character_,
+    variants = variants
+  ))
+  expect_match(text, "1 catalogued variant")
+  expect_false(grepl("AlphaMissense", text, fixed = TRUE))
+
+  prediction_text <- vr_chat_protvar_predictions(list(
+    ok = TRUE,
+    accession = "Q9P0N9",
+    position = 267L,
+    alt_aa = "S",
+    warnings = "FoldX prediction unavailable. Timed out.",
+    predictions = list(
+      list(name = "AlphaMissense", score = 0.7085, call = "pathogenic"),
+      list(name = "CADD", score = 27.5, call = "probably deleterious")
+    )
+  ))
+  expect_match(prediction_text, "Q9P0N9 residue 267")
+  expect_match(prediction_text, "AlphaMissense")
+  expect_match(prediction_text, "CADD")
+  expect_match(prediction_text, "Partial data warning")
+  expect_match(prediction_text, "FoldX prediction unavailable")
 })
 
 test_that("gnomAD summary reports exome/genome allele frequencies", {

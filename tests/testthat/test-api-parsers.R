@@ -48,8 +48,17 @@ test_that("myvariant_parse_hit() extracts key annotations", {
   expect_true(res$ok)
   expect_equal(res$rsid, "rs113488022")
   expect_equal(res$gene, "BRAF")
-  expect_match(res$hgvsp, "^p\\.")
-  expect_true(is.numeric(res$cadd_phred) || is.na(res$cadd_phred))
+  expect_identical(res$hgvsp, "p.V600A")
+  expect_false("cadd_phred" %in% names(res))
+})
+
+test_that("myvariant_representative_hgvsp favors the modal residue", {
+  expect_identical(
+    myvariant_representative_hgvsp(
+      c("p.Val640Glu", "p.Val600Glu", "p.Val207Glu", "p.V600E")
+    ),
+    "p.V600E"
+  )
 })
 
 test_that("gtex_parse_rows() builds a tissue/median data.frame", {
@@ -90,8 +99,425 @@ test_that("protvar parsers extract function text and variants", {
   pop <- read_fixture("protvar_population_p04637_175.json")
   variants <- protvar_variants_df(pop)
   expect_s3_class(variants, "data.frame")
-  expect_named(variants, c("change", "sources"))
+  expect_named(
+    variants,
+    c("wild_type", "change", "amino_acid", "sources", "genomic")
+  )
   expect_true(nrow(variants) >= 1)
+})
+
+test_that("ProtVar protein HGVS parsing keeps only its canonical mapping", {
+  payload <- read_fixture("protvar_mapping_q9p0n9_267_s.json")
+
+  result <- protvar_parse_mappings(
+    payload,
+    "NP_001305738.1:p.Pro267Ser"
+  )
+  expect_true(result$ok)
+  expect_equal(nrow(result$mappings), 1L)
+  expect_equal(result$mappings$accession, "Q9P0N9")
+  expect_equal(result$mappings$position, 267L)
+  expect_equal(result$mappings$genomic, "6-13305184-G-A")
+  expect_equal(result$mappings$cadd_score, 27.5)
+})
+
+test_that("ProtVar writes normalized GRCh38 alleles as RefSeq HGVS", {
+  expect_identical(
+    protvar_genomic_hgvs("7", 140753336, "A", "T"),
+    "NC_000007.14:g.140753336A>T"
+  )
+  expect_identical(
+    protvar_genomic_hgvs("chrX", 149483072, "G", "A"),
+    "NC_000023.11:g.149483072G>A"
+  )
+  expect_true(is.na(protvar_genomic_hgvs("GL000220.1", 10, "A", "G")))
+})
+
+test_that("ProtVar accepts UCSC-style chromosome HGVS through its normalizer", {
+  expect_identical(
+    protvar_query_term("chr7:g.140453136A>T"),
+    "7 140453136 A T"
+  )
+  expect_identical(
+    protvar_query_term("NC_000007.14:g.140753336A>T"),
+    "NC_000007.14:g.140753336A>T"
+  )
+})
+
+test_that("ProtVar parsing exposes distinct canonical candidates only", {
+  candidate <- function(accession, position, canonical) {
+    list(
+      accession = accession,
+      canonical = canonical,
+      isoformPosition = position,
+      refAA = "Pro",
+      variantAA = "Ser"
+    )
+  }
+  genomic_variant <- function(position, gene, isoforms) {
+    list(
+      chromosome = "1",
+      position = position,
+      refBase = "C",
+      altBase = "T",
+      genes = list(list(
+        geneName = gene,
+        caddScore = 20,
+        isoforms = isoforms
+      ))
+    )
+  }
+  payload <- list(
+    content = list(
+      inputs = list(list(
+        accession = NULL,
+        position = NULL,
+        refAA = NULL,
+        altAA = NULL,
+        derivedGenomicVariants = list(
+          genomic_variant(
+            10,
+            "GENE1",
+            list(
+              candidate("P11111", 10, TRUE),
+              candidate("P11111-2", 8, FALSE)
+            )
+          ),
+          genomic_variant(20, "GENE2", list(candidate("P22222", 20, TRUE)))
+        )
+      ))
+    )
+  )
+
+  result <- protvar_parse_mappings(payload, "ambiguous protein variant")
+  expect_true(result$ok)
+  expect_equal(result$mappings$accession, c("P11111", "P22222"))
+  expect_equal(result$mappings$position, c(10L, 20L))
+  expect_false(any(grepl("-2", result$mappings$accession, fixed = TRUE)))
+})
+
+test_that("ProtVar normalizes coding HGVS and preserves synonymous changes", {
+  payload <- list(
+    content = list(
+      inputs = list(list(
+        inputStr = "NM_020975.6(RET):c.3105G>A (p.Glu1035Glu)",
+        format = "HGVS_CODING",
+        type = "CODING_DNA",
+        derivedGenomicVariants = list(list(
+          chromosome = "10",
+          position = 43126640,
+          refBase = "G",
+          altBase = "A",
+          genes = list(list(
+            geneName = "RET",
+            caddScore = 2.694,
+            isoforms = list(list(
+              accession = "P07949",
+              canonical = TRUE,
+              isoformPosition = 1035,
+              refAA = "Glu",
+              variantAA = "Glu",
+              consequences = "synonymous"
+            ))
+          ))
+        ))
+      ))
+    )
+  )
+
+  result <- protvar_parse_mappings(
+    payload,
+    "NM_020975.6(RET):c.3105G>A (p.Glu1035Glu)"
+  )
+  expect_true(result$ok)
+  expect_equal(nrow(result$mappings), 1L)
+  expect_identical(
+    result$mappings$normalized_hgvs,
+    "NC_000010.11:g.43126640G>A"
+  )
+  expect_identical(result$mappings$gene, "RET")
+  expect_identical(result$mappings$accession, "P07949")
+  expect_identical(result$mappings$consequence, "synonymous")
+  expect_equal(result$mappings$cadd_score, 2.694)
+})
+
+test_that("ProtVar annotation remains useful when MyVariant has no record", {
+  mapping <- list(
+    accession = "P07949",
+    position = 1035L,
+    ref_aa = "E",
+    alt_aa = "E",
+    gene = "RET",
+    normalized_hgvs = "NC_000010.11:g.43126640G>A",
+    consequence = "synonymous"
+  )
+  result <- protvar_variant_annotation(
+    mapping,
+    "NM_020975.6(RET):c.3105G>A (p.Glu1035Glu)",
+    list(ok = FALSE, error = "No MyVariant record"),
+    list(
+      ok = TRUE,
+      rsid = "rs123",
+      clinvar_id = "RCV000000123",
+      clinical_significance = "Uncertain significance"
+    )
+  )
+
+  expect_true(result$ok)
+  expect_identical(result$id, "NC_000010.11:g.43126640G>A")
+  expect_identical(result$gene, "RET")
+  expect_identical(result$hgvsp, "p.E1035E")
+  expect_identical(result$rsid, "rs123")
+  expect_identical(result$clinvar_id, "RCV000000123")
+  expect_identical(result$clinvar_significance, "Uncertain significance")
+  expect_identical(result$sources, "ProtVar")
+})
+
+test_that("ClinVar lookup preserves the selected ProtVar allele", {
+  annotation <- list(
+    ok = TRUE,
+    clinvar_id = "RCV000014992",
+    rsid = "rs113488022"
+  )
+
+  expect_identical(
+    protvar_clinvar_lookup_id(annotation),
+    "RCV000014992"
+  )
+  expect_identical(
+    protvar_clinvar_lookup_id(list(
+      ok = TRUE,
+      clinvar_id = NA_character_,
+      rsid = "rs113488022"
+    )),
+    "rs113488022"
+  )
+  expect_null(protvar_clinvar_lookup_id(NULL))
+})
+
+test_that("ProtVar extracts identifiers from the selected genomic allele", {
+  payload <- list(
+    variants = list(
+      list(
+        alternativeSequence = "Ala",
+        genomicLocation = list("NC_000006.12:g.13305184G>C"),
+        xrefs = list(list(name = "dbSNP", id = "rs999"))
+      ),
+      list(
+        alternativeSequence = "Ser",
+        genomicLocation = list("NC_000006.12:g.13305184G>A"),
+        xrefs = list(
+          list(name = "ClinVar", id = "RCV000594426"),
+          list(name = "dbSNP", id = "rs200141039")
+        ),
+        clinicalSignificances = list(list(
+          type = "Variant of uncertain significance"
+        )),
+        populationFrequencies = list(list(frequency = 0.00002))
+      )
+    )
+  )
+
+  result <- protvar_parse_variant_metadata(
+    payload,
+    "NC_000006.12:g.13305184G>A"
+  )
+
+  expect_true(result$ok)
+  expect_identical(result$rsid, "rs200141039")
+  expect_identical(result$clinvar_id, "RCV000594426")
+  expect_identical(
+    result$clinical_significance,
+    "Variant of uncertain significance"
+  )
+  expect_equal(result$population_frequency, 0.00002)
+})
+
+test_that("ProtVar receives every supported single-variant input family", {
+  examples <- c(
+    "NC_000010.11:g.43118436A>C",
+    "NM_020975.6(RET):c.3105G>A (p.Glu1035Glu)",
+    "NP_001305738.1:p.Pro267Ser",
+    "14 89993420 A/G",
+    "P22309 G71R",
+    "X 149498202 . C G",
+    "1-55505447-C-T",
+    "rs864622779",
+    "RCV001270034",
+    "COSV64777467"
+  )
+  payload <- list(
+    content = list(
+      inputs = list(list(
+        format = "HGVS_PROTEIN",
+        type = "PROTEIN",
+        derivedGenomicVariants = list(list(
+          chromosome = "1",
+          position = 10,
+          refBase = "A",
+          altBase = "T",
+          genes = list(list(
+            geneName = "GENE1",
+            caddScore = 20,
+            isoforms = list(list(
+              accession = "P11111",
+              canonical = TRUE,
+              isoformPosition = 10,
+              refAA = "Ala",
+              variantAA = "Val",
+              consequences = "missense"
+            ))
+          ))
+        ))
+      ))
+    )
+  )
+  requests <- list()
+  original <- vr_api_get
+  vr_api_get <<- function(base_url, path, query, source, ...) {
+    requests[[length(requests) + 1L]] <<- query
+    list(ok = TRUE, data = payload)
+  }
+  on.exit(vr_api_get <<- original, add = TRUE)
+
+  results <- lapply(examples, protvar_find_mappings, assembly = "GRCh37")
+
+  expect_true(all(vapply(results, function(result) result$ok, logical(1))))
+  expect_identical(vapply(requests, `[[`, character(1), "q"), examples)
+  expect_true(all(vapply(requests, `[[`, character(1), "assembly") == "GRCh37"))
+})
+
+test_that("gnomAD uses the exact normalized allele instead of an ambiguous rsID", {
+  request_body <- NULL
+  original <- vr_api_post_json
+  vr_api_post_json <<- function(base_url, body, source, ...) {
+    request_body <<- body
+    list(
+      ok = TRUE,
+      data = list(
+        data = list(
+          variant = list(
+            variant_id = "6-13305184-G-A",
+            exome = list(af = 0.00006, ac = 88, an = 1461840),
+            genome = NULL
+          )
+        )
+      )
+    )
+  }
+  on.exit(vr_api_post_json <<- original, add = TRUE)
+
+  result <- gnomad_frequency("6-13305184-G-A")
+
+  expect_true(result$ok)
+  expect_match(request_body$query, "variantId: \\$identifier")
+  expect_identical(request_body$variables$identifier, "6-13305184-G-A")
+})
+
+test_that("Ensembl VEP uses its allele-specific GRCh38 region endpoint", {
+  requested_path <- NULL
+  original <- vr_api_get
+  vr_api_get <<- function(base_url, path, query, source, ...) {
+    requested_path <<- path
+    list(
+      ok = TRUE,
+      data = list(list(
+        most_severe_consequence = "missense_variant",
+        assembly_name = "GRCh38",
+        transcript_consequences = list()
+      ))
+    )
+  }
+  on.exit(vr_api_get <<- original, add = TRUE)
+
+  result <- ensembl_vep("6-13305184-G-A")
+
+  expect_true(result$ok)
+  expect_identical(
+    requested_path,
+    "vep/human/region/6:13305184-13305184:1/A"
+  )
+})
+
+test_that("Ensembl VEP filters an rsID response to the selected allele", {
+  record <- list(
+    most_severe_consequence = "missense_variant",
+    assembly_name = "GRCh38",
+    transcript_consequences = list(
+      list(
+        variant_allele = "A",
+        biotype = "protein_coding",
+        gene_symbol = "TBC1D7",
+        transcript_id = "ENST_A",
+        consequence_terms = list("missense_variant")
+      ),
+      list(
+        variant_allele = "C",
+        biotype = "protein_coding",
+        gene_symbol = "TBC1D7",
+        transcript_id = "ENST_C",
+        consequence_terms = list("missense_variant")
+      )
+    )
+  )
+
+  result <- ensembl_parse_vep(record, alt_allele = "A")
+
+  expect_true(result$ok)
+  expect_identical(result$data$transcript, "ENST_A")
+})
+
+test_that("ProtVar parsers preserve allele-specific prediction data", {
+  mapping <- read_fixture("protvar_mapping_p15056_600.json")
+  cadd <- protvar_parse_mapping_cadd(mapping, "P15056", 600)
+  expect_equal(nrow(cadd), 2L)
+  expect_true(all(cadd$amino_acid == "L"))
+  expect_true(all(cadd$call == "probably deleterious"))
+
+  scores <- protvar_parse_scores(
+    read_fixture("protvar_scores_q9nuw8_493_r.json")
+  )
+  expect_equal(scores$alpha_score, 0.9973)
+  expect_identical(scores$alpha_call, "pathogenic")
+  expect_equal(scores$esm_score, -13.063)
+  expect_identical(scores$esm_call, "pathogenic")
+  expect_identical(scores$missense3d, "neutral")
+
+  foldx <- protvar_parse_foldx(
+    read_fixture("protvar_foldx_q9nuw8_493_r.json")
+  )
+  expect_equal(foldx$amino_acid, "R")
+  expect_equal(foldx$score, 2.42402)
+  expect_identical(foldx$call, "likely to be destabilising")
+})
+
+test_that("ProtVar interpretation thresholds match its displayed categories", {
+  expect_identical(protvar_cadd_call(27.5), "probably deleterious")
+  expect_identical(protvar_esm_call(-5.5), "uncertain")
+  expect_identical(
+    protvar_foldx_call(1.49),
+    "unlikely to be destabilising"
+  )
+})
+
+test_that("ProtVar reports a FoldX transport failure as partial data", {
+  original <- vr_api_get
+  vr_api_get <<- function(base_url, path, query, source, ...) {
+    if (grepl("^score/", path)) {
+      return(list(ok = TRUE, data = list()))
+    }
+    list(ok = FALSE, error = "service temporarily unavailable")
+  }
+  on.exit(vr_api_get <<- original, add = TRUE)
+
+  result <- protvar_predict_variant("Q9P0N9", 267L, "S", cadd_score = 27.5)
+
+  expect_true(result$ok)
+  expect_match(result$warnings, "FoldX prediction unavailable")
+  expect_match(result$warnings, "service temporarily unavailable")
+  foldx <- result$predictions[[4]]
+  expect_identical(foldx$name, "FoldX - Stability change (ΔΔG)")
+  expect_true(is.na(foldx$score))
 })
 
 test_that("protvar_strip_citations() drops evidence, keeps the prose", {
@@ -121,12 +547,16 @@ test_that("protvar_strip_citations() drops evidence, keeps the prose", {
   expect_true(is_blank(protvar_strip_citations(NA_character_)))
 })
 
-test_that("protvar_parse_position() pulls the residue number", {
-  expect_equal(protvar_parse_position("R175H"), 175L)
-  expect_equal(protvar_parse_position("p.Arg175His"), 175L)
-  expect_equal(protvar_parse_position("175"), 175L)
-  expect_null(protvar_parse_position("no digits"))
-  expect_null(protvar_parse_position(NULL))
+test_that("protvar_parse_substitution() normalizes protein changes", {
+  expect_equal(
+    protvar_parse_substitution("NP_001305738.1:p.Pro267Ser"),
+    list(ref_aa = "P", position = 267L, alt_aa = "S")
+  )
+  expect_equal(
+    protvar_parse_substitution("p.V600E"),
+    list(ref_aa = "V", position = 600L, alt_aa = "E")
+  )
+  expect_null(protvar_parse_substitution("p.Pro267del"))
 })
 
 test_that("opentargets_parse_rows() builds a disease/score data.frame", {
@@ -329,9 +759,9 @@ test_that("myvariant_parse_predictions() summarizes in-silico scores", {
   }
   expect_equal(by_name("REVEL")$score, 0.672)
   expect_match(by_name("REVEL")$call, "damaging")
-  # AlphaMissense score is a per-transcript array; the parser keeps the max.
-  expect_equal(by_name("AlphaMissense")$score, 0.9878)
-  expect_match(by_name("AlphaMissense")$call, "pathogenic")
+  prediction_names <- vapply(res$predictions, `[[`, character(1), "name")
+  expect_false("AlphaMissense" %in% prediction_names)
+  expect_false("CADD (phred)" %in% prediction_names)
 })
 
 test_that("myvariant_predictions() rejects non-queryable input", {
@@ -346,33 +776,6 @@ test_that("myvariant_query_term() quotes HGVS but not rsIDs", {
     myvariant_query_term("chr7:g.140453136A>T"),
     '"chr7:g.140453136A>T"'
   )
-})
-
-test_that("myvariant_parse_matches() preserves distinct genomic alleles", {
-  hits <- list(
-    list(
-      `_id` = "chr7:g.140453136A>G",
-      dbnsfp = list(genename = "BRAF", hgvsp = c("p.Val600Ala", "p.V600A"))
-    ),
-    list(
-      `_id` = "chr7:g.140453136A>T",
-      dbnsfp = list(genename = "BRAF", hgvsp = c("p.Val600Glu", "p.V600E"))
-    )
-  )
-  parsed <- myvariant_parse_matches(hits, "rs113488022")
-
-  expect_true(parsed$ok)
-  expect_equal(nrow(parsed$matches), 2L)
-  expect_equal(parsed$matches$id, c(
-    "chr7:g.140453136A>G",
-    "chr7:g.140453136A>T"
-  ))
-  expect_match(parsed$matches$label[[2]], "p.V600E")
-})
-
-test_that("myvariant_parse_matches() reports no usable matches", {
-  expect_false(myvariant_parse_matches(NULL, "rs0")$ok)
-  expect_false(myvariant_parse_matches(list(list()), "rs0")$ok)
 })
 
 test_that("myvariant_parse_gene_variants() builds a ranked variant table", {

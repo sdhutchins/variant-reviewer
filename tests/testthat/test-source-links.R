@@ -30,6 +30,10 @@ test_that("source URL builders return the expected links", {
     src_ensembl_variant("rs113488022"),
     "Variation/Explore\\?v=rs113488022"
   )
+  expect_match(
+    src_ensembl_variant("6-13305184-G-A"),
+    "region/6:13305184-13305184:1/A"
+  )
   expect_match(src_clinvar_variation("40389"), "clinvar/variation/40389/$")
   expect_equal(
     src_monarch_gene("11998"),
@@ -64,10 +68,27 @@ test_that("vr_source_link renders an anchor, or NULL without an href", {
   expect_match(html, "Source")
 })
 
-test_that("vr_card_header includes a refresh button at ns('refresh')", {
+test_that("vr_card_header has a heading and a specific refresh label", {
   ns <- NS("mycard")
   html <- as.character(vr_card_header("My card", ns))
   expect_match(html, 'id="mycard-refresh"')
+  expect_match(html, '<h2 class="h6 mb-0">My card</h2>', fixed = TRUE)
+  expect_match(html, 'aria-label="Retry My card"', fixed = TRUE)
+  expect_match(html, "vr-header-action", fixed = TRUE)
+})
+
+test_that("card header actions follow source, refresh, then data action", {
+  ns <- NS("table")
+  html <- as.character(vr_card_header("Results", ns, download = TRUE))
+
+  source_position <- regexpr("table-source", html, fixed = TRUE)[[1]]
+  refresh_position <- regexpr("table-refresh", html, fixed = TRUE)[[1]]
+  download_position <- regexpr("table-download_control", html, fixed = TRUE)[[
+    1
+  ]]
+
+  expect_lt(source_position, refresh_position)
+  expect_lt(refresh_position, download_position)
 })
 
 test_that("vr_retry_counter's dep/bump wire a reactive to re-run on demand", {

@@ -17,8 +17,9 @@ The app is a reactive front end over several public bioinformatics APIs:
 | Card / section          | Source                                      |
 | ----------------------- | ------------------------------------------- |
 | Gene summary            | MyGene                                      |
-| Variant annotation      | MyVariant                                   |
-| In-silico predictions   | dbNSFP (MyVariant)                          |
+| Variant annotation      | ProtVar + MyVariant                         |
+| ProtVar predictions     | ProtVar (EMBL-EBI)                          |
+| Additional predictions  | dbNSFP (MyVariant)                          |
 | Protein context         | ProtVar (EBI)                               |
 | Variant landscape       | ClinVar variants (gnomAD) + UniProt domains |
 | Conservation            | dbNSFP (MyVariant)                          |
@@ -166,8 +167,9 @@ too.
 
 The search module creates a reactive query with a gene and a variant. As you
 type a gene, the variant box suggests that gene's known pathogenic and likely
-pathogenic variants (from ClinVar, through MyVariant). You can still type any
-rsID or HGVS value by hand.
+pathogenic variants (from ClinVar, through MyVariant). You can also enter one
+ProtVar-supported variant as HGVS, VCF fields, genomic coordinates, UniProt
+protein notation, or a gnomAD, dbSNP, ClinVar, or COSMIC identifier.
 
 Before the app queries an API, it checks the gene and the variant. It uses
 [biobouncer](https://github.com/samuelbharti/biobouncer)'s offline `pattern`
@@ -176,8 +178,12 @@ rejects bad input right away, with a message in the app, instead of running a
 search that will fail. The same check applies to the assistant's
 `set_selection` tool.
 
-`app_server.R` resolves the gene one time, through MyGene. This step maps the
-gene symbol to its Ensembl, Entrez, and UniProt IDs. Every gene-level module
+ProtVar normalizes each variant to its genomic allele, gene, canonical protein
+residue, and amino-acid change. Genomic alleles use GRCh38 RefSeq HGVS rather
+than `chrN` notation. ProtVar's allele-specific dbSNP and ClinVar identifiers
+provide fallbacks when another annotation service cannot resolve the original
+input. `app_server.R` resolves the gene one time through MyGene. This step maps
+the gene symbol to its Ensembl, Entrez, and UniProt IDs. Every gene-level module
 shares this one result, so the app queries each API only when needed. API
 clients are pure R code, in `R/`, and you can test each one on its own.
 Modules only manage reactivity and rendering.

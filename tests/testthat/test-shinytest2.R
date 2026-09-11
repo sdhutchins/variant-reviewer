@@ -65,3 +65,43 @@ test_that("searching a gene populates the gene summary card", {
   html <- app$get_html("#gene_summary-content")
   expect_match(html, "TP53")
 })
+
+test_that("an ambiguous rsID preserves the selected allele", {
+  testthat::skip_if_not_installed("shinytest2")
+  # Hits live APIs; skip on CI to keep the pipeline deterministic.
+  testthat::skip_on_ci()
+
+  app <- shinytest2::AppDriver$new(
+    app_dir = test_path("..", ".."),
+    name = "app-ambiguous-variant",
+    height = 900,
+    width = 1200
+  )
+  withr::defer(app$stop())
+
+  app$set_inputs(
+    visible_cards = "variant_summary",
+    `search-input_type` = "variant",
+    `search-variant` = "rs113488022"
+  )
+  app$click("search-submit")
+  app$wait_for_js(
+    "document.getElementById('search-variant_match') !== null",
+    timeout = 30000
+  )
+  app$set_inputs(
+    `search-variant_match` = "P15056|600|V|E|7-140753336-A-T"
+  )
+  app$click("search-submit")
+  app$wait_for_js(
+    paste0(
+      "document.getElementById('variant_summary-content')?.innerText",
+      ".includes('NC_000007.14:g.140753336A>T')"
+    ),
+    timeout = 30000
+  )
+
+  html <- app$get_html("#variant_summary-content")
+  expect_match(html, "NC_000007.14:g.140753336A&gt;T", fixed = TRUE)
+  expect_match(html, "p.V600E", fixed = TRUE)
+})

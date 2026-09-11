@@ -1,6 +1,6 @@
 # Warm cache for the demo example.
 #
-# The navbar Demo button loads BRAF V600E. Cold, that is ~16 sequential API
+# The navbar Demo button loads TBC1D7 Pro267Ser. Cold, that is several API
 # calls and a slow first search, which is a bad look mid-presentation. So we ship
 # a recorded snapshot of those responses (made by dev/record_demo_cache.R) and
 # seed the in-process cache from it, letting the demo load from memory instead of

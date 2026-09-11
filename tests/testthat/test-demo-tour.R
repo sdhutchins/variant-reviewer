@@ -15,8 +15,8 @@ test_that("vr_demo_tour builds a cicerone guide with a step per anchor", {
 })
 
 test_that("vr_demo_modal names the example and the assistant steps", {
-  html <- as.character(vr_demo_modal("BRAF V600E"))
-  expect_match(html, "BRAF V600E", fixed = TRUE)
+  html <- as.character(vr_demo_modal(.gene_search_example$label))
+  expect_match(html, "TBC1D7 Pro267Ser", fixed = TRUE)
   # The ampersand is HTML-escaped once rendered.
   expect_match(html, "Model &amp; key", fixed = TRUE)
 })
