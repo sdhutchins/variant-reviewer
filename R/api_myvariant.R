@@ -22,6 +22,80 @@ myvariant_query_term <- function(variant) {
   if (grepl(":", term, fixed = TRUE)) sprintf('"%s"', term) else term
 }
 
+# Resolve an rsID or HGVS entry to the distinct genomic records MyVariant
+# returns. This is separate from annotation so the search UI can ask the user to
+# choose an allele instead of silently taking the first hit when a term is
+# ambiguous.
+myvariant_find_matches <- function(variant, size = 100) {
+  if (!myvariant_is_queryable(variant)) {
+    return(list(
+      ok = FALSE,
+      error = "Enter an rsID (rs...) or HGVS to find a matching variant."
+    ))
+  }
+  term <- trimws(as.character(variant))
+  res <- vr_api_get(
+    MYVARIANT_BASE,
+    path = "query",
+    query = list(
+      q = myvariant_query_term(term),
+      size = size,
+      fields = "dbsnp.rsid,dbnsfp.genename,dbnsfp.hgvsp"
+    ),
+    source = "MyVariant"
+  )
+  if (!res$ok) {
+    return(list(ok = FALSE, error = res$error))
+  }
+  myvariant_parse_matches(res$data$hits, term)
+}
+
+# Pure parser for variant-search matches. The genomic HGVS id distinguishes
+# alleles that share an rsID; gene and protein change provide readable context.
+myvariant_parse_matches <- function(hits, term = NA_character_) {
+  if (is.null(hits) || length(hits) == 0) {
+    return(list(
+      ok = FALSE,
+      error = paste0("No annotation found for '", term, "'.")
+    ))
+  }
+  rows <- lapply(hits, function(hit) {
+    id <- pluck_at(hit, "_id")
+    if (is_blank(id)) {
+      return(NULL)
+    }
+    gene <- mygene_first(pluck_at(hit, "dbnsfp", "genename"))
+    protein_changes <- unique(as.character(unlist(
+      pluck_at(hit, "dbnsfp", "hgvsp"),
+      use.names = FALSE
+    )))
+    protein_changes <- protein_changes[!is.na(protein_changes) &
+      nzchar(protein_changes)]
+    protein <- if (length(protein_changes) == 0) {
+      NA_character_
+    } else {
+      protein_changes[[which.min(nchar(protein_changes))]]
+    }
+    label_parts <- c(id, gene, protein)
+    label_parts <- label_parts[!is.na(label_parts) & nzchar(label_parts)]
+    data.frame(
+      id = id,
+      label = paste(label_parts, collapse = " | "),
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- do.call(rbind, rows)
+  if (is.null(rows) || nrow(rows) == 0) {
+    return(list(
+      ok = FALSE,
+      error = paste0("No annotation found for '", term, "'.")
+    ))
+  }
+  rows <- rows[!duplicated(rows$id), , drop = FALSE]
+  rownames(rows) <- NULL
+  list(ok = TRUE, matches = rows)
+}
+
 # Returns:
 #   list(ok = TRUE, id, rsid, gene, hgvsp, cadd_phred, clinvar_significance)
 #   list(ok = FALSE, error = "...")

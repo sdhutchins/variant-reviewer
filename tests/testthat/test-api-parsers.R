@@ -348,6 +348,33 @@ test_that("myvariant_query_term() quotes HGVS but not rsIDs", {
   )
 })
 
+test_that("myvariant_parse_matches() preserves distinct genomic alleles", {
+  hits <- list(
+    list(
+      `_id` = "chr7:g.140453136A>G",
+      dbnsfp = list(genename = "BRAF", hgvsp = c("p.Val600Ala", "p.V600A"))
+    ),
+    list(
+      `_id` = "chr7:g.140453136A>T",
+      dbnsfp = list(genename = "BRAF", hgvsp = c("p.Val600Glu", "p.V600E"))
+    )
+  )
+  parsed <- myvariant_parse_matches(hits, "rs113488022")
+
+  expect_true(parsed$ok)
+  expect_equal(nrow(parsed$matches), 2L)
+  expect_equal(parsed$matches$id, c(
+    "chr7:g.140453136A>G",
+    "chr7:g.140453136A>T"
+  ))
+  expect_match(parsed$matches$label[[2]], "p.V600E")
+})
+
+test_that("myvariant_parse_matches() reports no usable matches", {
+  expect_false(myvariant_parse_matches(NULL, "rs0")$ok)
+  expect_false(myvariant_parse_matches(list(list()), "rs0")$ok)
+})
+
 test_that("myvariant_parse_gene_variants() builds a ranked variant table", {
   hits <- read_fixture("myvariant_gene_variants_braf.json")$hits
   res <- myvariant_parse_gene_variants(hits)
