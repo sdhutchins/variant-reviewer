@@ -1,22 +1,27 @@
-# In-silico predictions card. Pathogenicity/impact scores for the variant from
-# dbNSFP (+ CADD) via MyVariant: REVEL, AlphaMissense, CADD, PolyPhen-2, SIFT,
-# MetaLR, MetaSVM.
+# Additional in-silico predictions from dbNSFP via MyVariant: REVEL,
+# PolyPhen-2, SIFT, MetaLR, and MetaSVM. ProtVar supplies AlphaMissense and CADD.
 
 predictions_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("In-silico predictions", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "160px"
-    ))
+  vr_result_card(id, "Additional in-silico predictions", download = TRUE)
+}
+
+predictions_table_data <- function(predictions) {
+  data.frame(
+    Predictor = vapply(predictions, function(item) item$name, character(1)),
+    Score = vapply(predictions, function(item) item$score, numeric(1)),
+    Call = vapply(
+      predictions,
+      function(item) if (is.na(item$call)) "" else item$call,
+      character(1)
+    ),
+    stringsAsFactors = FALSE
   )
 }
 
 # search: reactive() -> list(gene, variant) (uses the variant string).
 predictions_server <- function(id, search) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     retry <- vr_retry_counter()
     vr_card_refresh_observer(input, retry$bump)
 
@@ -26,7 +31,9 @@ predictions_server <- function(id, search) {
       if (is.null(query) || is_blank(query$variant)) {
         return(NULL)
       }
-      myvariant_predictions(query$variant)
+      normalized <- query$protvar$normalized_hgvs %||% NA_character_
+      term <- if (is_blank(normalized)) query$variant else normalized
+      myvariant_predictions(term)
     })
 
     output$source <- renderUI({
@@ -39,43 +46,49 @@ predictions_server <- function(id, search) {
       vr_source_link(src_dbsnp(rsid), "dbSNP")
     })
 
+    vr_result_csv(
+      output,
+      predictions,
+      "additional-predictions.csv",
+      extract = function(value) predictions_table_data(value$predictions),
+      ns = ns
+    )
+
     output$content <- renderUI({
-      res <- predictions()
-      if (is.null(res)) {
-        return(vr_empty(
-          "Enter a variant (rsID or HGVS) to see in-silico predictions."
-        ))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      rows <- lapply(res$predictions, function(p) {
-        tags$tr(
-          tags$td(tags$strong(p$name)),
-          tags$td(
-            class = "text-end",
-            if (is.na(p$score)) "—" else vr_num(p$score, 3)
-          ),
-          tags$td(class = "text-muted", if (is.na(p$call)) "" else p$call)
-        )
-      })
-      tagList(
-        tags$table(
-          class = "table table-sm align-middle mb-2",
-          tags$thead(
+      vr_result_ui(
+        predictions(),
+        "Enter a variant (rsID or HGVS) to see in-silico predictions.",
+        function(res) {
+          rows <- lapply(res$predictions, function(p) {
             tags$tr(
-              tags$th("Predictor"),
-              tags$th(class = "text-end", "Score"),
-              tags$th("Call")
+              tags$td(tags$strong(p$name)),
+              tags$td(
+                class = "text-end",
+                if (is.na(p$score)) "—" else vr_num(p$score, 3)
+              ),
+              tags$td(class = "text-muted", if (is.na(p$call)) "" else p$call)
             )
-          ),
-          tags$tbody(rows)
-        ),
-        tags$p(
-          class = "text-muted small mb-0",
-          "Scores from dbNSFP (via MyVariant). Thresholds differ by tool; use",
-          " alongside other evidence, not on their own."
-        )
+          })
+          tagList(
+            tags$table(
+              class = "table table-sm align-middle mb-2",
+              tags$thead(
+                tags$tr(
+                  tags$th("Predictor"),
+                  tags$th(class = "text-end", "Score"),
+                  tags$th("Call")
+                )
+              ),
+              tags$tbody(rows)
+            ),
+            tags$p(
+              class = "text-muted small mb-0",
+              "Additional scores from dbNSFP via MyVariant. Thresholds differ by",
+              " tool; use",
+              " alongside other evidence, not on their own."
+            )
+          )
+        }
       )
     })
 
