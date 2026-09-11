@@ -5,7 +5,7 @@ external_links_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    card_header("External resources"),
+    card_header(tags$h2("External resources", class = "h6 mb-0")),
     card_body(shinycssloaders::withSpinner(
       uiOutput(ns("content")),
       proxy.height = "80px"

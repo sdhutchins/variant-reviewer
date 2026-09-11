@@ -462,7 +462,7 @@ byok_chat_ui <- function(
   # A fixed-height card so the chat fills it and its message list scrolls; the
   # header carries the title and the settings trigger. Pass an explicit `height`
   # (e.g. "600px") when embedding in a non-fill page.
-  bslib::as_fill_carrier(tagList(
+  tagList(
     config_offcanvas,
     bslib::card(
       height = height,
@@ -494,7 +494,7 @@ byok_chat_ui <- function(
         )
       )
     )
-  ))
+  )
 }
 
 # --- Example prompts -----------------------------------------------------------

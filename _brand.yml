@@ -14,10 +14,11 @@ color:
     green: "#4c7a5b"
     clay: "#c07a52"
     stone: "#7a7468"
+    stone-text: "#6f695f"
     charcoal: "#2c2a25"
     paper: "#faf8f3"
   primary: green
-  secondary: stone
+  secondary: stone-text
   foreground: charcoal
   background: paper
 

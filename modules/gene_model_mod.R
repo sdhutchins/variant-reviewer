@@ -4,15 +4,7 @@
 # come from Ensembl; the variant's genomic position is reused from gnomAD.
 
 gene_model_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Gene model (Ensembl)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "180px"
-    ))
-  )
+  vr_result_card(id, "Gene model (Ensembl)", "180px")
 }
 
 # resolved:    reactive() -> mygene_resolve() (uses the Ensembl gene id)
@@ -71,82 +63,93 @@ gene_model_server <- function(id, resolved, gnomad_data) {
       vr_source_link(src_ensembl_gene(res$ensembl_gene), "Ensembl")
     })
 
-    output$plot <- renderPlot({
-      m <- model()
-      req(m, isTRUE(m$ok))
-      ex <- m$exons
-      ex$hit <- !is.na(hit_exon()) & ex$number == hit_exon()
-      ggplot2::ggplot(ex) +
-        ggplot2::geom_segment(
-          ggplot2::aes(
-            x = min(number) - 0.5,
-            xend = max(number) + 0.5,
-            y = 0,
-            yend = 0
-          ),
-          colour = "grey60",
-          linewidth = 0.6
-        ) +
-        ggplot2::geom_rect(
-          ggplot2::aes(
-            xmin = number - 0.42,
-            xmax = number + 0.42,
-            ymin = -0.5,
-            ymax = 0.5,
-            fill = hit
-          ),
-          colour = "grey30"
-        ) +
-        ggplot2::geom_text(
-          ggplot2::aes(x = number, y = 0, label = number),
-          size = 3.1,
-          colour = "white"
-        ) +
-        ggplot2::scale_fill_manual(
-          values = c("FALSE" = vr_colors$primary, "TRUE" = vr_colors$accent),
-          guide = "none"
-        ) +
-        ggplot2::scale_y_continuous(limits = c(-1.2, 1.2)) +
-        ggplot2::labs(x = "Exon (5′→3′, not to scale)", y = NULL) +
-        ggplot2::theme_minimal(base_size = 15) +
-        ggplot2::theme(
-          axis.text.y = ggplot2::element_blank(),
-          axis.text.x = ggplot2::element_blank(),
-          axis.title.x = ggplot2::element_text(size = 12),
-          panel.grid = ggplot2::element_blank()
-        )
-    })
+    output$plot <- renderPlot(
+      {
+        m <- model()
+        req(m, isTRUE(m$ok))
+        ex <- m$exons
+        ex$hit <- !is.na(hit_exon()) & ex$number == hit_exon()
+        ggplot2::ggplot(ex) +
+          ggplot2::geom_segment(
+            ggplot2::aes(
+              x = min(number) - 0.5,
+              xend = max(number) + 0.5,
+              y = 0,
+              yend = 0
+            ),
+            colour = "grey60",
+            linewidth = 0.6
+          ) +
+          ggplot2::geom_rect(
+            ggplot2::aes(
+              xmin = number - 0.42,
+              xmax = number + 0.42,
+              ymin = -0.5,
+              ymax = 0.5,
+              fill = hit
+            ),
+            colour = "grey30"
+          ) +
+          ggplot2::geom_text(
+            ggplot2::aes(x = number, y = 0, label = number),
+            size = 3.1,
+            colour = "white"
+          ) +
+          ggplot2::scale_fill_manual(
+            values = c(
+              "FALSE" = vr_colors$primary,
+              "TRUE" = vr_colors$accent_text
+            ),
+            guide = "none"
+          ) +
+          ggplot2::scale_y_continuous(limits = c(-1.2, 1.2)) +
+          ggplot2::labs(x = "Exon (5′→3′, not to scale)", y = NULL) +
+          ggplot2::theme_minimal(base_size = 15) +
+          ggplot2::theme(
+            axis.text.y = ggplot2::element_blank(),
+            axis.text.x = ggplot2::element_blank(),
+            axis.title.x = ggplot2::element_text(size = 12),
+            panel.grid = ggplot2::element_blank()
+          )
+      },
+      alt = paste(
+        "Schematic of exons in the canonical Ensembl transcript, with the",
+        "exon containing the selected variant highlighted when available."
+      )
+    )
 
     output$content <- renderUI({
-      m <- model()
-      if (is.null(m)) {
-        return(vr_empty("Search for a gene to see its exon model."))
-      }
-      if (!isTRUE(m$ok)) {
-        return(vr_error(m$error))
-      }
-      strand <- if (isTRUE(m$strand < 0)) "− strand" else "+ strand"
-      exon_note <- if (!is.na(hit_exon())) {
-        sprintf(
-          "The variant falls in exon %d of %d.",
-          hit_exon(),
-          nrow(m$exons)
-        )
-      } else {
-        sprintf("%d exons; no variant positioned on the gene.", nrow(m$exons))
-      }
-      tagList(
-        plotOutput(ns("plot"), height = "150px"),
-        tags$p(
-          class = "text-muted small mb-0 mt-1",
-          sprintf(
-            "Canonical transcript %s (chr%s, %s). ",
-            m$transcript,
-            m$region,
-            strand
-          ),
-          exon_note
-        )
+      vr_result_ui(
+        model(),
+        "Search for a gene to see its exon model.",
+        function(m) {
+          strand <- if (isTRUE(m$strand < 0)) "− strand" else "+ strand"
+          exon_note <- if (!is.na(hit_exon())) {
+            sprintf(
+              "The variant falls in exon %d of %d.",
+              hit_exon(),
+              nrow(m$exons)
+            )
+          } else {
+            sprintf(
+              "%d exons; no variant positioned on the gene.",
+              nrow(m$exons)
+            )
+          }
+          tagList(
+            plotOutput(ns("plot"), height = "150px"),
+            tags$p(
+              class = "text-muted small mb-0 mt-1",
+              sprintf(
+                "Canonical transcript %s (chr%s, %s). ",
+                m$transcript,
+                m$region,
+                strand
+              ),
+              exon_note
+            )
+          )
+        }
       )
     })
 

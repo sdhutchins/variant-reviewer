@@ -4,6 +4,7 @@
 # than every card stretching to fill the viewport).
 page_navbar(
   title = "Variant Reviewer",
+  lang = "en",
   # Apply branding from _brand.yml (colors, fonts). brand = TRUE requires the
   # file to exist; switch to bslib::bs_theme() to make it optional.
   #
@@ -13,7 +14,11 @@ page_navbar(
   # card-header wash in app.css (a light tint of the brand primary) still
   # separates header from body on top of that.
   theme = bslib::bs_theme(brand = TRUE) |>
-    bslib::bs_add_variables("card-bg" = "#ffffff"),
+    bslib::bs_add_variables(
+      "card-bg" = "#ffffff",
+      "color-contrast-dark" = "#000000",
+      "color-contrast-light" = "#ffffff"
+    ),
   # Charcoal navbar (see _brand.yml's `charcoal`) so it reads as a distinct
   # band above the page rather than blending into the "paper" background;
   # theme = "dark" switches the nav text/icons to light for contrast on it.
@@ -40,8 +45,11 @@ page_navbar(
   nav_panel(
     title = "Home",
     icon = icon("dna"),
-    div(
+    tags$main(
+      id = "home-main",
       class = "px-2 px-lg-4 py-3",
+      style = "--bslib-spacer: 0.75rem;",
+      tags$h1("Variant Reviewer", class = "visually-hidden"),
       tags$p(
         class = "text-muted",
         "A lightweight gene and variant interpretation companion."
@@ -71,7 +79,12 @@ page_navbar(
   nav_panel(
     title = "About",
     icon = icon("circle-info"),
-    div(class = "px-2 px-lg-4 py-3", about_page)
+    tags$main(
+      id = "about-main",
+      class = "px-2 px-lg-4 py-3",
+      tags$h1("About Variant Reviewer", class = "visually-hidden"),
+      about_page
+    )
   ),
   # Right-aligned demo button: loads a worked example into the dashboard and
   # explains how to use the app and the assistant (wired in server.R).
