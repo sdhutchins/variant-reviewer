@@ -2,14 +2,23 @@
 # (domains, regions, sites) and calls out which one the variant residue is in.
 
 protein_domains_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Protein domains & features", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "200px"
-    ))
+  vr_result_card(id, "Protein domains & features", "200px", download = TRUE)
+}
+
+protein_features_table_data <- function(features) {
+  data.frame(
+    Feature = features$label,
+    Description = ifelse(
+      nzchar(features$description),
+      features$description,
+      features$label
+    ),
+    Range = ifelse(
+      features$begin == features$end,
+      as.character(features$begin),
+      paste0(features$begin, "–", features$end)
+    ),
+    stringsAsFactors = FALSE
   )
 }
 
@@ -28,17 +37,23 @@ protein_domains_server <- function(id, resolved, search, annotation) {
       if (is.null(res) || !isTRUE(res$ok)) {
         return(NULL)
       }
-      if (is_blank(res$uniprot)) {
+      query <- search()
+      context <- if (is.null(query) || is_blank(query$variant)) {
+        NULL
+      } else {
+        protein_variant_context(query, res, annotation())
+      }
+      accession <- context$accession %||% res$uniprot
+      if (is_blank(accession)) {
         return(list(ok = FALSE, error = "No UniProt accession for this gene."))
       }
-      out <- proteins_features(res$uniprot)
+      out <- proteins_features(accession)
       # Attach the variant residue (may be NULL) so the card can highlight it.
       if (isTRUE(out$ok)) {
-        query <- search()
         out$position <- if (is.null(query) || is_blank(query$variant)) {
           NULL
         } else {
-          protein_resolve_position(query$variant, annotation())
+          context$position
         }
       }
       out
@@ -58,22 +73,11 @@ protein_domains_server <- function(id, resolved, search, annotation) {
       req(res, isTRUE(res$ok), nrow(res$features) > 0)
       df <- res$features
       hot <- row_at_variant(df, res$position)
-      display <- data.frame(
-        Feature = df$label,
-        Description = ifelse(nzchar(df$description), df$description, df$label),
-        Range = ifelse(
-          df$begin == df$end,
-          as.character(df$begin),
-          paste0(df$begin, "–", df$end)
-        ),
-        stringsAsFactors = FALSE
-      )
-      reactable::reactable(
+      display <- protein_features_table_data(df)
+      vr_reactable(
         display,
-        compact = TRUE,
-        highlight = TRUE,
-        defaultPageSize = 8,
-        showPageSizeOptions = TRUE,
+        page_size = 8,
+        searchable = FALSE,
         # Emphasize the feature(s) the variant residue falls in.
         rowStyle = function(index) {
           if (isTRUE(hot[index])) {
@@ -82,6 +86,14 @@ protein_domains_server <- function(id, resolved, search, annotation) {
         }
       )
     })
+
+    vr_result_csv(
+      output,
+      features,
+      "protein-domains.csv",
+      extract = function(value) protein_features_table_data(value$features),
+      ns = ns
+    )
 
     output$source <- renderUI({
       res <- features()
@@ -93,50 +105,52 @@ protein_domains_server <- function(id, resolved, search, annotation) {
     })
 
     output$content <- renderUI({
-      res <- features()
-      if (is.null(res)) {
-        return(vr_empty(
-          "Search for a gene to see protein domains and features."
-        ))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      if (nrow(res$features) == 0) {
-        return(vr_empty("No annotated domains or features for this protein."))
-      }
-      pos <- res$position
-      header <- if (
-        !is.null(pos) && !is.na(suppressWarnings(as.integer(pos)))
-      ) {
-        hits <- proteins_features_at(res$features, pos)
-        if (nrow(hits) > 0) {
-          labels <- paste(
-            vapply(
-              seq_len(nrow(hits)),
-              function(i) {
-                proteins_feature_text(hits, i)
-              },
-              character(1)
-            ),
-            collapse = ", "
-          )
-          tags$p(
-            class = "mb-2",
-            tags$strong(sprintf("Residue %s is in: ", pos)),
-            labels
-          )
-        } else {
-          tags$p(
-            class = "text-muted mb-2",
-            sprintf(
-              "Residue %s is not within an annotated domain or site.",
-              pos
-            )
+      vr_result_ui(
+        features(),
+        "Search for a gene to see protein domains and features.",
+        function(res) {
+          if (nrow(res$features) == 0) {
+            return(vr_empty(
+              "No annotated domains or features for this protein."
+            ))
+          }
+          pos <- res$position
+          header <- if (
+            !is.null(pos) && !is.na(suppressWarnings(as.integer(pos)))
+          ) {
+            hits <- proteins_features_at(res$features, pos)
+            if (nrow(hits) > 0) {
+              labels <- paste(
+                vapply(
+                  seq_len(nrow(hits)),
+                  function(i) {
+                    proteins_feature_text(hits, i)
+                  },
+                  character(1)
+                ),
+                collapse = ", "
+              )
+              tags$p(
+                class = "mb-2",
+                tags$strong(sprintf("Residue %s is in: ", pos)),
+                labels
+              )
+            } else {
+              tags$p(
+                class = "text-muted mb-2",
+                sprintf(
+                  "Residue %s is not within an annotated domain or site.",
+                  pos
+                )
+              )
+            }
+          }
+          tagList(
+            header,
+            reactable::reactableOutput(ns("table"))
           )
         }
-      }
-      tagList(header, reactable::reactableOutput(ns("table")))
+      )
     })
 
     # Returned so the parent can surface this card's data to the assistant.

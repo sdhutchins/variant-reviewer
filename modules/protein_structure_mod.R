@@ -22,7 +22,14 @@ protein_structure_ui <- function(id) {
       ),
       conditionalPanel(
         condition = sprintf("output['%s']", ns("has_model")),
-        r3dmol::r3dmolOutput(ns("viewer"), height = "360px"),
+        tags$div(
+          role = "img",
+          `aria-label` = paste(
+            "Interactive AlphaFold protein structure.",
+            "The model description follows the viewer."
+          ),
+          r3dmol::r3dmolOutput(ns("viewer"), height = "300px")
+        ),
         uiOutput(ns("note"))
       )
     )
@@ -46,17 +53,23 @@ protein_structure_server <- function(id, resolved, search, annotation) {
       if (is.null(res) || !isTRUE(res$ok)) {
         return(NULL)
       }
-      if (is_blank(res$uniprot)) {
+      query <- search()
+      context <- if (is.null(query) || is_blank(query$variant)) {
+        NULL
+      } else {
+        protein_variant_context(query, res, annotation())
+      }
+      accession <- context$accession %||% res$uniprot
+      if (is_blank(accession)) {
         return(list(ok = FALSE, error = "No UniProt accession for this gene."))
       }
-      out <- alphafold_model(res$uniprot)
+      out <- alphafold_model(accession)
       if (isTRUE(out$ok)) {
-        out$accession <- res$uniprot
-        query <- search()
+        out$accession <- accession
         out$position <- if (is.null(query) || is_blank(query$variant)) {
           NULL
         } else {
-          protein_resolve_position(query$variant, annotation())
+          context$position
         }
       }
       out

@@ -2,15 +2,7 @@
 # at the residue, given the gene's UniProt accession + a protein position.
 
 protein_summary_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Protein (ProtVar)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "120px"
-    ))
-  )
+  vr_result_card(id, "Protein (ProtVar)", "120px", copy = TRUE)
 }
 
 # resolved:   reactive() -> mygene_resolve() result (for UniProt accession).
@@ -34,40 +26,40 @@ protein_summary_server <- function(id, resolved, search, annotation) {
       ) {
         return(NULL)
       }
-      if (is_blank(res$uniprot)) {
-        return(list(ok = FALSE, error = "No UniProt accession for this gene."))
-      }
-      position <- protein_resolve_position(query$variant, annotation())
-      if (is.null(position)) {
+      context <- protein_variant_context(query, res, annotation())
+      if (is.null(context)) {
         return(list(
           ok = FALSE,
-          error = "Could not determine a protein position from the variant."
+          error = "Could not determine the protein substitution."
         ))
       }
-      protvar_annotate(res$uniprot, position)
+      protvar_annotate(context$accession, context$position)
     })
 
     output$source <- renderUI({
       res <- protein()
       req(!is.null(res), isTRUE(res$ok))
-      vr_source_link(src_uniprot(res$accession), "UniProt")
+      vr_source_link("https://www.ebi.ac.uk/ProtVar/", "ProtVar")
     })
 
     output$content <- renderUI({
-      res <- protein()
-      if (is.null(res)) {
-        return(vr_empty("Enter a variant to see protein-level context."))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      tagList(
-        vr_field("Accession", res$accession),
-        vr_field("Position", res$position),
-        if (!is_blank(res$function_text)) {
-          tags$p(class = "mt-2", tags$strong("Function: "), res$function_text)
-        },
-        protein_variants_ui(res$variants)
+      vr_result_ui(
+        protein(),
+        "Enter a variant to see protein-level context.",
+        function(res) {
+          tagList(
+            vr_field("Accession", res$accession),
+            vr_field("Position", res$position),
+            if (!is_blank(res$function_text)) {
+              tags$p(
+                class = "mt-2",
+                tags$strong("Function: "),
+                res$function_text
+              )
+            },
+            protein_variants_ui(res$variants)
+          )
+        }
       )
     })
 
@@ -76,21 +68,35 @@ protein_summary_server <- function(id, resolved, search, annotation) {
   })
 }
 
-# Derive a protein position from the variant string. For an rsID/HGVS input the
-# digits are not a protein position, so use the supplied MyVariant annotation's
-# protein change (hgvsp); otherwise treat the input as a protein change
-# (e.g. "R175H") and parse it directly.
-protein_resolve_position <- function(variant, annotation = NULL) {
-  if (myvariant_is_queryable(variant)) {
-    if (isTRUE(annotation$ok) && !is_blank(annotation$hgvsp)) {
-      return(protvar_parse_position(annotation$hgvsp))
-    }
+# Prefer ProtVar's canonical normalization for protein HGVS input. Other input
+# formats retain the existing MyGene accession plus MyVariant protein change.
+protein_variant_context <- function(query, resolved, annotation = NULL) {
+  if (is.null(query) || is_blank(query$variant)) {
     return(NULL)
   }
-  protvar_parse_position(variant)
+  if (!is.null(query$protvar)) {
+    return(query$protvar)
+  }
+  if (is.null(resolved) || !isTRUE(resolved$ok) || is_blank(resolved$uniprot)) {
+    return(NULL)
+  }
+  protein_change <- if (isTRUE(annotation$ok) && !is_blank(annotation$hgvsp)) {
+    annotation$hgvsp
+  } else {
+    query$variant
+  }
+  substitution <- protvar_parse_substitution(protein_change)
+  if (is.null(substitution)) {
+    return(NULL)
+  }
+  c(
+    list(accession = resolved$uniprot, cadd_score = NA_real_),
+    substitution
+  )
 }
 
-# Render the known-variants-at-residue block.
+# Render the known substitutions at the selected residue without duplicating
+# the selected variant's scores from the dedicated predictions card.
 protein_variants_ui <- function(variants) {
   if (is.null(variants) || nrow(variants) == 0) {
     return(vr_empty("No catalogued variants at this residue."))
@@ -101,11 +107,11 @@ protein_variants_ui <- function(variants) {
       class = "mb-0",
       lapply(seq_len(nrow(variants)), function(i) {
         tags$li(
-          tags$strong(variants$change[i]),
-          if (!is_blank(variants$sources[i])) {
+          tags$strong(variants$change[[i]]),
+          if (!is_blank(variants$sources[[i]])) {
             tags$span(
               class = "text-muted",
-              paste0(" (", variants$sources[i], ")")
+              paste0(" (", variants$sources[[i]], ")")
             )
           }
         )
