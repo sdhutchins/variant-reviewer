@@ -1,0 +1,16 @@
+[
+  {
+    "type": "ESM",
+    "score": -13.063
+  },
+  {
+    "type": "AM",
+    "amPathogenicity": 0.9973,
+    "amClass": "PATHOGENIC"
+  },
+  {
+    "type": "M3D",
+    "prediction": "Neutral",
+    "damagingFeature": "-"
+  }
+]

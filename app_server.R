@@ -187,6 +187,12 @@ function(input, output, session) {
     annotation_retry$bump
   )
   predictions_data <- predictions_server("predictions", search_effective)
+  protvar_predictions_data <- protvar_predictions_server(
+    "protvar_predictions",
+    resolved,
+    search_effective,
+    variant_annotation
+  )
   protein_data <- protein_summary_server(
     "protein_summary",
     resolved,

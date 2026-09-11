@@ -8,7 +8,8 @@
 VR_CHAT_CARDS <- c(
   gene = "Gene summary",
   variant = "Variant annotation",
-  predictions = "In-silico predictions",
+  protvar_predictions = "ProtVar predictions",
+  predictions = "Additional in-silico predictions",
   protein = "Protein context (ProtVar)",
   landscape = "Variant landscape (ClinVar lollipop)",
   conservation = "Conservation scores",
@@ -33,7 +34,10 @@ VR_CHAT_CARDS <- c(
 # chat input (fill-to-edit) and as suggestion cards in the connected greeting.
 VR_CHAT_SUGGESTIONS <- c(
   "Gene overview" = "Load TP53 and summarize what it does and its top disease associations.",
-  "Variant significance" = "Is BRAF V600E (rs113488022) pathogenic? Cite ClinVar and its gnomAD frequency.",
+  "Variant significance" = paste(
+    "Review NP_001305738.1:p.Pro267Ser.",
+    "Cite ProtVar, ClinVar, and its gnomAD frequency."
+  ),
   "Tissue expression" = "Load BRCA1 and tell me which tissues express it most highly.",
   "Interactions" = "What are the top STRING interaction partners for EGFR?"
 )
@@ -93,8 +97,6 @@ vr_chat_variant <- function(res) {
     .vr_or(res$gene),
     ". Protein change ",
     .vr_or(res$hgvsp),
-    ", CADD phred ",
-    .vr_or(res$cadd_phred),
     ", ClinVar: ",
     .vr_or(res$clinvar_significance),
     "."
@@ -122,13 +124,31 @@ vr_chat_protein <- function(res) {
       ""
     },
     n_var,
-    " catalogued variant(s) at this residue",
-    if (n_var > 0) {
-      paste0(": ", paste(res$variants$change, collapse = ", "), ".")
-    } else {
-      "."
-    }
+    " catalogued variant(s) at this residue."
   )
+}
+
+vr_chat_protvar_predictions <- function(res) {
+  g <- .vr_card_guard(res, "No ProtVar predictions yet (needs a variant).")
+  if (!is.null(g)) {
+    return(g)
+  }
+  summary <- paste0(
+    "ProtVar predictions for ",
+    .vr_or(res$accession),
+    " residue ",
+    .vr_or(res$position),
+    ", alternate amino acid ",
+    .vr_or(res$alt_aa),
+    ": ",
+    sub("^In-silico predictions: ", "", vr_chat_predictions(res))
+  )
+  warnings <- res$warnings %||% character()
+  if (length(warnings) > 0) {
+    paste(summary, "Partial data warning:", paste(warnings, collapse = " "))
+  } else {
+    summary
+  }
 }
 
 vr_chat_clinvar <- function(res) {
@@ -608,6 +628,7 @@ vr_chat_card_text <- function(card, data) {
     card,
     gene = vr_chat_gene,
     variant = vr_chat_variant,
+    protvar_predictions = vr_chat_protvar_predictions,
     predictions = vr_chat_predictions,
     protein = vr_chat_protein,
     landscape = vr_chat_landscape,

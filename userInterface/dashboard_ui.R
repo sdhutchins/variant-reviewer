@@ -7,7 +7,8 @@
 .dashboard_cards <- c(
   gene_summary = "Gene summary",
   variant_summary = "Variant",
-  predictions = "In-silico predictions",
+  protvar_predictions = "ProtVar predictions",
+  predictions = "Additional in-silico predictions",
   protein_summary = "Protein (ProtVar)",
   landscape = "Variant landscape",
   conservation = "Conservation",
@@ -101,46 +102,58 @@ dashboard_page <- tagList(
   .annotation_note,
   uiOutput("search_notice"),
   .cards_toggle,
-  # Gene (left) and Protein (right) flank a middle column that stacks the
-  # variant card with its clinical-significance (ClinVar) and population-
-  # frequency (gnomAD) detail. Those cards are short, so stacking them here
-  # fills the whitespace they used to leave beside the taller gene/protein
-  # summaries. The vstack keeps them spaced whichever ones are toggled on.
+  # Independent column stacks let each related card follow the one above it
+  # without waiting for the tallest card in a shared grid row. This preserves
+  # the three-column desktop layout while reducing empty horizontal bands.
   layout_columns(
     col_widths = c(4, 4, 4),
-    .card_when_shown("gene_summary", gene_summary_ui("gene_summary")),
     div(
-      class = "vstack gap-3",
+      class = "vstack gap-2",
+      .card_when_shown("gene_summary", gene_summary_ui("gene_summary")),
+      .card_when_shown("constraint", gene_constraint_ui("constraint"))
+    ),
+    div(
+      class = "vstack gap-2",
       .card_when_shown(
         "variant_summary",
         variant_summary_ui("variant_summary")
       ),
       .card_when_shown("clinvar", clinvar_ui("clinvar")),
-      .card_when_shown("gnomad", gnomad_ui("gnomad"))
+      .card_when_shown("gnomad", gnomad_ui("gnomad")),
+      .card_when_shown("predictions", predictions_ui("predictions"))
     ),
-    .card_when_shown("protein_summary", protein_summary_ui("protein_summary"))
+    div(
+      class = "vstack gap-2",
+      .card_when_shown(
+        "protein_summary",
+        protein_summary_ui("protein_summary")
+      ),
+      .card_when_shown(
+        "protvar_predictions",
+        protvar_predictions_ui("protvar_predictions")
+      )
+    )
   ),
   # Whole-protein ClinVar "lollipop": where the variant sits among known
   # variants and domains. Full width, since it spans the protein.
   .card_when_shown("landscape", variant_landscape_ui("landscape")),
+  # Pair the two smaller context cards with the related protein panels below
+  # them so the shorter cards do not leave an otherwise empty grid row.
   layout_columns(
     col_widths = c(6, 6),
-    .card_when_shown("predictions", predictions_ui("predictions")),
-    .card_when_shown("constraint", gene_constraint_ui("constraint"))
-  ),
-  # Two variant-level visualizations: conservation at the residue and the
-  # gnomAD allele-frequency breakdown by genetic ancestry.
-  layout_columns(
-    col_widths = c(6, 6),
-    .card_when_shown("conservation", conservation_ui("conservation")),
-    .card_when_shown("gnomad_ancestry", gnomad_ancestry_ui("gnomad_ancestry"))
-  ),
-  # Protein domains/features table beside the 3D structure, each half width so
-  # the structure viewer stays roughly square rather than stretching full width.
-  layout_columns(
-    col_widths = c(6, 6),
-    .card_when_shown("domains", protein_domains_ui("domains")),
-    .card_when_shown("structure", protein_structure_ui("structure"))
+    div(
+      class = "vstack gap-2",
+      .card_when_shown("conservation", conservation_ui("conservation")),
+      .card_when_shown("domains", protein_domains_ui("domains"))
+    ),
+    div(
+      class = "vstack gap-2",
+      .card_when_shown(
+        "gnomad_ancestry",
+        gnomad_ancestry_ui("gnomad_ancestry")
+      ),
+      .card_when_shown("structure", protein_structure_ui("structure"))
+    )
   ),
   # Exon map (Ensembl) next to the per-transcript consequences (both Ensembl).
   .card_when_shown("genemodel", gene_model_ui("genemodel")),
