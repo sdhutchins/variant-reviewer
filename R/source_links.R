@@ -18,29 +18,34 @@ vr_source_link <- function(href, label = "Source") {
   )
 }
 
-# Card header: title + a small refresh icon (left), the module's source-link
-# slot `uiOutput(ns("source"))` (right). `ns` is the module's NS().
+# Card header: title + a small refresh icon (left), then the source link and any
+# copy or CSV action on the right. `ns` is the module's NS().
 #
 # The refresh button's input ID is always ns("refresh"); pair it with
 # vr_retry_counter()/vr_card_refresh_observer() (below) in the module's server
 # so a click re-runs this card's fetch -- most useful for retrying after an
 # API error without re-running the whole search.
-vr_card_header <- function(title, ns) {
+vr_card_header <- function(title, ns, copy = FALSE, download = FALSE) {
   card_header(
     class = "d-flex justify-content-between align-items-center gap-2",
-    tags$span(
+    tags$h2(title, class = "h6 mb-0"),
+    tags$div(
       class = "d-flex align-items-center gap-2",
-      tags$span(title),
+      uiOutput(ns("source"), inline = TRUE),
       actionButton(
         ns("refresh"),
         label = NULL,
         icon = icon("rotate-right"),
-        class = "btn-sm btn-link p-0 vr-card-refresh",
-        title = "Retry this card",
-        `aria-label` = "Retry this card"
-      )
-    ),
-    uiOutput(ns("source"), inline = TRUE)
+        class = paste(
+          "btn-sm btn-link vr-header-action",
+          "vr-card-refresh"
+        ),
+        title = paste("Retry", title),
+        `aria-label` = paste("Retry", title)
+      ),
+      if (isTRUE(copy)) vr_copy_button(paste("Copy", title, "text")),
+      if (isTRUE(download)) uiOutput(ns("download_control"), inline = TRUE)
+    )
   )
 }
 
