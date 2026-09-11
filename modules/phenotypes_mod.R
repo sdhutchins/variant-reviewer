@@ -4,15 +4,7 @@
 # resolves; Monarch mirrors the same HPO term pages under its CURIE scheme).
 
 phenotypes_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Phenotypes (HPO)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "200px"
-    ))
-  )
+  vr_result_card(id, "Phenotypes (HPO)", "200px", download = TRUE)
 }
 
 # resolved: reactive() -> mygene_resolve() result (uses the HGNC id).
@@ -47,13 +39,8 @@ phenotypes_server <- function(id, resolved) {
       res <- phenotypes()
       req(res, isTRUE(res$ok))
       df <- res$data
-      reactable::reactable(
+      vr_reactable(
         df,
-        searchable = TRUE,
-        compact = TRUE,
-        highlight = TRUE,
-        defaultPageSize = 10,
-        showPageSizeOptions = TRUE,
         columns = list(
           hpo_id = reactable::colDef(
             name = "HPO term",
@@ -61,12 +48,8 @@ phenotypes_server <- function(id, resolved) {
             html = TRUE,
             # Link each term to its Monarch page.
             cell = function(value) {
-              sprintf(
-                paste0(
-                  '<a href="https://monarchinitiative.org/%s"',
-                  ' target="_blank" rel="noopener noreferrer">%s</a>'
-                ),
-                value,
+              vr_external_link_html(
+                paste0("https://monarchinitiative.org/", value),
                 value
               )
             }
@@ -76,24 +59,30 @@ phenotypes_server <- function(id, resolved) {
       )
     })
 
+    vr_result_csv(
+      output,
+      phenotypes,
+      "hpo-phenotypes.csv",
+      ns = ns
+    )
+
     output$content <- renderUI({
-      res <- phenotypes()
-      if (is.null(res)) {
-        return(vr_empty("Search for a gene to see associated phenotypes."))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      tagList(
-        reactable::reactableOutput(ns("table")),
-        if (!is_blank(res$count)) {
-          tags$p(
-            class = "text-muted small mt-2 mb-0",
-            sprintf(
-              "Showing %d of %s associated HPO phenotypes.",
-              nrow(res$data),
-              format(res$count, big.mark = ",")
-            )
+      vr_result_ui(
+        phenotypes(),
+        "Search for a gene to see associated phenotypes.",
+        function(res) {
+          tagList(
+            reactable::reactableOutput(ns("table")),
+            if (!is_blank(res$count)) {
+              tags$p(
+                class = "text-muted small mt-2 mb-0",
+                sprintf(
+                  "Showing %d of %s associated HPO phenotypes.",
+                  nrow(res$data),
+                  format(res$count, big.mark = ",")
+                )
+              )
+            }
           )
         }
       )

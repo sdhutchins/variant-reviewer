@@ -3,15 +3,7 @@
 # linked to its Europe PMC article page.
 
 literature_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Literature (Europe PMC)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "200px"
-    ))
-  )
+  vr_result_card(id, "Literature (Europe PMC)", "200px", download = TRUE)
 }
 
 # resolved: reactive() -> mygene_resolve() result (uses the gene symbol).
@@ -42,13 +34,8 @@ literature_server <- function(id, resolved, variant_rsid) {
       res <- literature()
       req(res, isTRUE(res$ok))
       df <- res$data
-      reactable::reactable(
+      vr_reactable(
         df,
-        searchable = TRUE,
-        compact = TRUE,
-        highlight = TRUE,
-        defaultPageSize = 10,
-        showPageSizeOptions = TRUE,
         columns = list(
           id = reactable::colDef(show = FALSE),
           source = reactable::colDef(show = FALSE),
@@ -61,16 +48,13 @@ literature_server <- function(id, resolved, variant_rsid) {
             cell = function(value, index) {
               src <- df$source[index]
               aid <- df$id[index]
-              if (is.na(src) || is.na(aid) || src == "" || aid == "") {
-                return(value)
+              href <- if (is_blank(src) || is_blank(aid)) {
+                NULL
+              } else {
+                paste0("https://europepmc.org/article/", src, "/", aid)
               }
-              sprintf(
-                paste0(
-                  '<a href="https://europepmc.org/article/%s/%s"',
-                  ' target="_blank" rel="noopener noreferrer">%s</a>'
-                ),
-                src,
-                aid,
+              vr_external_link_html(
+                href,
                 value
               )
             }
@@ -87,24 +71,33 @@ literature_server <- function(id, resolved, variant_rsid) {
       )
     })
 
+    vr_result_csv(
+      output,
+      literature,
+      "literature.csv",
+      extract = function(value) {
+        value$data[c("title", "authors", "journal", "year", "cited_by")]
+      },
+      ns = ns
+    )
+
     output$content <- renderUI({
-      res <- literature()
-      if (is.null(res)) {
-        return(vr_empty("Search for a gene to see recent literature."))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      tagList(
-        reactable::reactableOutput(ns("table")),
-        if (!is_blank(res$count)) {
-          tags$p(
-            class = "text-muted small mt-2 mb-0",
-            sprintf(
-              "Showing %d of %s matching publications.",
-              nrow(res$data),
-              format(res$count, big.mark = ",")
-            )
+      vr_result_ui(
+        literature(),
+        "Search for a gene to see recent literature.",
+        function(res) {
+          tagList(
+            reactable::reactableOutput(ns("table")),
+            if (!is_blank(res$count)) {
+              tags$p(
+                class = "text-muted small mt-2 mb-0",
+                sprintf(
+                  "Showing %d of %s matching publications.",
+                  nrow(res$data),
+                  format(res$count, big.mark = ",")
+                )
+              )
+            }
           )
         }
       )

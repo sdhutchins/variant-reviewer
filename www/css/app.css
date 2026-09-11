@@ -71,6 +71,39 @@
     right: 1rem;
     bottom: 1rem;
   }
+
+  /* Stack provenance fields on small screens so release identifiers remain
+     readable instead of forcing four narrow table columns. */
+  .vr-provenance-table thead {
+    display: none;
+  }
+
+  .vr-provenance-table tbody,
+  .vr-provenance-table tr,
+  .vr-provenance-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .vr-provenance-table tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .vr-provenance-table td {
+    padding: 0.125rem 0;
+    border: 0;
+  }
+
+  .vr-provenance-table td:nth-child(2)::before {
+    content: "API: ";
+    font-weight: 600;
+  }
+
+  .vr-provenance-table td:nth-child(3)::before {
+    content: "Data: ";
+    font-weight: 600;
+  }
 }
 
 /* Example prompts as a plain bullet list rather than shinychat's card grid.
@@ -216,16 +249,121 @@
   border-bottom-color: color-mix(in srgb, var(--bs-primary) 22%, var(--bs-border-color));
 }
 
+/* Match static Bootstrap tables to the shared reactable table theme. */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--bs-body-color);
+  --bs-table-border-color: var(--bs-border-color);
+}
+
+.table > thead > tr > th {
+  padding: 6px 8px;
+  background-color: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color);
+}
+
+.table > tbody > tr > td {
+  padding: 6px 8px;
+}
+
+/* Shared sizing keeps all card-header utilities aligned. */
+.vr-header-action {
+  min-height: 1.75rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.vr-csv-download {
+  white-space: nowrap;
+}
+
 /* Card-header refresh icon (see vr_card_header() in R/source_links.R): muted
    at rest so it doesn't compete with the bold title next to it, primary-
    colored on hover/focus so it still reads as clickable. */
 .vr-card-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  padding: 0;
   color: var(--bs-secondary-color);
-  font-size: 0.8rem;
-  line-height: 1;
 }
 
 .vr-card-refresh:hover,
 .vr-card-refresh:focus-visible {
   color: var(--bs-primary);
+}
+
+/* Match the compact CSV control while keeping the copy action understandable
+   without relying on its icon or tooltip alone. */
+.vr-card-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 5.5rem;
+  text-decoration: none;
+}
+
+/* A valid no-result response is informational, not a warning. */
+.vr-empty-result {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+  font-size: 0.875rem;
+}
+
+/* Reactable's built-in data controls follow the same compact utility scale as
+   CSV, Copy, and refresh without making dense tables feel form-sized. */
+.rt-search,
+.rt-page-size-select,
+.rt-page-button {
+  height: 1.75rem;
+  min-height: 1.75rem;
+  border-color: var(--bs-border-color);
+  border-radius: var(--bs-border-radius-sm);
+  font-size: 0.8rem;
+}
+
+.rt-search,
+.rt-page-size-select {
+  padding: 0.2rem 0.5rem;
+}
+
+.rt-page-button {
+  min-width: 1.75rem;
+  padding: 0.15rem 0.35rem;
+}
+
+.rt-pagination {
+  color: var(--bs-secondary-color);
+  font-size: 0.8rem;
+}
+
+/* Keep the accessible reactable details button, but present it as the inline
+   "More" text that follows a truncated Open Targets drug indication. */
+.vr-drugs-table .rt-td-expandable .rt-td-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+
+.vr-drugs-table .rt-expander-button {
+  order: 2;
+  margin-left: 0.25rem;
+  color: var(--bs-link-color);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.vr-drugs-table .rt-expander-button::after {
+  content: "More";
+}
+
+.vr-drugs-table .rt-expander {
+  display: none;
 }

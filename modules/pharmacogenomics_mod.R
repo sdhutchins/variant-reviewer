@@ -5,14 +5,11 @@
 # the common case for a well-behaved gene.
 
 pharmacogenomics_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Pharmacogenomics (Open Targets)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "200px"
-    ))
+  vr_result_card(
+    id,
+    "Pharmacogenomics (Open Targets)",
+    "200px",
+    download = TRUE
   )
 }
 
@@ -56,13 +53,8 @@ pharmacogenomics_server <- function(id, resolved, variant_rsid) {
       # Surface the loaded variant's annotations first.
       hit <- matches(df)
       df <- df[order(!hit), , drop = FALSE]
-      reactable::reactable(
+      vr_reactable(
         df,
-        searchable = TRUE,
-        compact = TRUE,
-        highlight = TRUE,
-        defaultPageSize = 10,
-        showPageSizeOptions = TRUE,
         # The full genotype annotation is long, so it lives in an expandable row.
         details = function(index) {
           note <- df$genotype[index]
@@ -78,13 +70,9 @@ pharmacogenomics_server <- function(id, resolved, variant_rsid) {
             maxWidth = 130,
             html = TRUE,
             cell = function(value) {
-              if (is.na(value) || value == "") {
-                return("—")
-              }
-              sprintf(
-                '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+              vr_external_link_html(
                 src_dbsnp(value),
-                value
+                if (is_blank(value)) "—" else value
               )
             }
           ),
@@ -95,31 +83,41 @@ pharmacogenomics_server <- function(id, resolved, variant_rsid) {
       )
     })
 
+    vr_result_csv(
+      output,
+      pgx,
+      "pharmacogenomics.csv",
+      extract = function(value) {
+        hit <- matches(value$data)
+        value$data[order(!hit), , drop = FALSE]
+      },
+      ns = ns
+    )
+
     output$content <- renderUI({
-      res <- pgx()
-      if (is.null(res)) {
-        return(vr_empty("Search for a gene to see pharmacogenomics."))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      n_hit <- sum(matches(res$data))
-      rsid <- variant_rsid()
-      tagList(
-        reactable::reactableOutput(ns("table")),
-        tags$p(
-          class = "text-muted small mt-2 mb-0",
-          if (!is_blank(rsid) && n_hit > 0) {
-            sprintf(
-              "%d of %d annotation(s) match the loaded variant %s.",
-              n_hit,
-              nrow(res$data),
-              rsid
+      vr_result_ui(
+        pgx(),
+        "Search for a gene to see pharmacogenomics.",
+        function(res) {
+          n_hit <- sum(matches(res$data))
+          rsid <- variant_rsid()
+          tagList(
+            reactable::reactableOutput(ns("table")),
+            tags$p(
+              class = "text-muted small mt-2 mb-0",
+              if (!is_blank(rsid) && n_hit > 0) {
+                sprintf(
+                  "%d of %d annotation(s) match the loaded variant %s.",
+                  n_hit,
+                  nrow(res$data),
+                  rsid
+                )
+              } else {
+                sprintf("%d pharmacogenomics annotation(s).", nrow(res$data))
+              }
             )
-          } else {
-            sprintf("%d pharmacogenomics annotation(s).", nrow(res$data))
-          }
-        )
+          )
+        }
       )
     })
 

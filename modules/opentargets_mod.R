@@ -2,14 +2,11 @@
 # associated with the gene and their association scores as a reactable.
 
 opentargets_ui <- function(id) {
-  ns <- NS(id)
-  card(
-    full_screen = TRUE,
-    vr_card_header("Disease associations (Open Targets)", ns),
-    card_body(shinycssloaders::withSpinner(
-      uiOutput(ns("content")),
-      proxy.height = "200px"
-    ))
+  vr_result_card(
+    id,
+    "Disease associations (Open Targets)",
+    "200px",
+    download = TRUE
   )
 }
 
@@ -39,13 +36,8 @@ opentargets_server <- function(id, resolved) {
       res <- diseases()
       req(res, isTRUE(res$ok))
       df <- res$data
-      reactable::reactable(
+      vr_reactable(
         df,
-        searchable = TRUE,
-        compact = TRUE,
-        highlight = TRUE,
-        defaultPageSize = 10,
-        showPageSizeOptions = TRUE,
         columns = list(
           disease_id = reactable::colDef(show = FALSE),
           disease = reactable::colDef(
@@ -55,15 +47,13 @@ opentargets_server <- function(id, resolved) {
             # Link each disease to its Open Targets page.
             cell = function(value, index) {
               id <- df$disease_id[index]
-              if (is.na(id) || id == "") {
-                return(value)
+              href <- if (is_blank(id)) {
+                NULL
+              } else {
+                paste0("https://platform.opentargets.org/disease/", id)
               }
-              sprintf(
-                paste0(
-                  '<a href="https://platform.opentargets.org/disease/%s"',
-                  ' target="_blank" rel="noopener noreferrer">%s</a>'
-                ),
-                id,
+              vr_external_link_html(
+                href,
                 value
               )
             }
@@ -77,24 +67,31 @@ opentargets_server <- function(id, resolved) {
       )
     })
 
+    vr_result_csv(
+      output,
+      diseases,
+      "disease-associations.csv",
+      extract = function(value) value$data[c("disease", "score")],
+      ns = ns
+    )
+
     output$content <- renderUI({
-      res <- diseases()
-      if (is.null(res)) {
-        return(vr_empty("Search for a gene to see disease associations."))
-      }
-      if (!isTRUE(res$ok)) {
-        return(vr_error(res$error))
-      }
-      tagList(
-        reactable::reactableOutput(ns("table")),
-        if (!is_blank(res$count)) {
-          tags$p(
-            class = "text-muted small mt-2 mb-0",
-            sprintf(
-              "Showing top %d of %s associated diseases.",
-              nrow(res$data),
-              format(res$count, big.mark = ",")
-            )
+      vr_result_ui(
+        diseases(),
+        "Search for a gene to see disease associations.",
+        function(res) {
+          tagList(
+            reactable::reactableOutput(ns("table")),
+            if (!is_blank(res$count)) {
+              tags$p(
+                class = "text-muted small mt-2 mb-0",
+                sprintf(
+                  "Showing top %d of %s associated diseases.",
+                  nrow(res$data),
+                  format(res$count, big.mark = ",")
+                )
+              )
+            }
           )
         }
       )
