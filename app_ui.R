@@ -26,6 +26,7 @@ page_navbar(
   fillable = FALSE,
   header = tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "css/app.css"),
+    tags$script(src = "js/app.js"),
     # GoatCounter, the visit counter of the bioinformatics gallery. It sets no
     # cookie. The path it records begins with the hostname, so every
     # application of the gallery lands in one dashboard. count.js sends nothing
