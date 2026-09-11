@@ -42,21 +42,29 @@ page_navbar(
     icon = icon("dna"),
     div(
       class = "px-2 px-lg-4 py-3",
-      # Results (width 9) on the left scroll with the page; the chat (width 3)
-      # on the right stays pinned in view (see .vr-chat-col in app.css).
-      layout_columns(
-        # vr-home-grid pins the assistant to a fixed-width track on wide screens
-        # (see app.css); col_widths still governs narrower ones.
-        class = "vr-home-grid",
-        col_widths = c(9, 3),
-        div(
-          tags$p(
-            class = "text-muted",
-            "A lightweight gene and variant interpretation companion."
-          ),
-          dashboard_page
-        ),
-        div(id = "tour_chat", class = "vr-chat-col", chat_panel)
+      tags$p(
+        class = "text-muted",
+        "A lightweight gene and variant interpretation companion."
+      ),
+      dashboard_page,
+      # Bootstrap's collapse behavior keeps the chat mounted while hiding it,
+      # so its messages and connection state survive closing the popup.
+      div(
+        id = "tour_chat",
+        class = "collapse vr-chat-col vr-chat-popup",
+        chat_panel
+      ),
+      tags$button(
+        id = "chat_toggle",
+        type = "button",
+        class = "btn btn-primary vr-chat-launcher",
+        `data-bs-toggle` = "collapse",
+        `data-bs-target` = "#tour_chat",
+        `aria-controls` = "tour_chat",
+        `aria-expanded` = "false",
+        `aria-label` = "Open or close the assistant",
+        tags$span(class = "vr-chat-open-icon", icon("comments")),
+        tags$span(class = "vr-chat-close-icon", icon("xmark"))
       )
     )
   ),

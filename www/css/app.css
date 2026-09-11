@@ -1,47 +1,81 @@
-/* Home page: the results column (left) scrolls with the page while the chat
-   column (right) stays pinned in view.
-
-   layout_columns() wraps each child in its own grid item, and that wrapper is a
-   bslib fill container -- a COLUMN flexbox. So this element is a flex item whose
-   cross axis is horizontal, which makes align-self control width, not height. An
-   align-self of start therefore shrink-wrapped the column to its content, and
-   the width jumped whenever the chat's content changed (the greeting's
-   suggestion cards, then a reply with a long id). Stretching pins it to the grid
-   track instead; height already follows the content, since the flex container's
-   main axis is vertical and nothing here grows. min-width:0 and the wrap keep a
-   long unbroken token from forcing an overflow. */
+/* Keep the assistant out of the dashboard layout until its fixed launcher is
+   clicked. Bootstrap's collapse class controls visibility; the popup remains in
+   the DOM so the chat retains its state. */
 .vr-chat-col {
-  position: sticky;
-  top: 1rem;
-  align-self: stretch;
-  width: 100%;
   min-width: 0;
   overflow-wrap: anywhere;
+  --shiny-chat-suggestion-card-min-width: 0px;
 }
 
-/* On wide screens give the assistant a fixed track rather than a 3/12 share, so
-   it keeps a usable width no matter the viewport and the results column takes
-   whatever is left. Overriding the template means the g-col-* spans no longer
-   apply, hence the grid-column reset. Below lg, col_widths still applies. */
-@media (min-width: 992px) {
-  .bslib-grid.vr-home-grid {
-    --vr-chat-width: 520px;
-    grid-template-columns: minmax(0, 1fr) var(--vr-chat-width);
+.vr-chat-popup {
+  position: fixed;
+  right: 1rem;
+  bottom: 6rem;
+  z-index: 1030;
+  width: min(420px, calc(100vw - 2.5rem));
+  filter: drop-shadow(0 0.75rem 1.5rem rgba(0, 0, 0, 0.18));
+}
+
+.vr-chat-popup > .card {
+  max-height: calc(100dvh - 8rem);
+}
+
+.vr-chat-launcher {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1031;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.18);
+  font-size: 1.25rem;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.vr-chat-launcher:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.65rem 1.25rem rgba(0, 0, 0, 0.22);
+}
+
+.vr-chat-close-icon {
+  display: none;
+}
+
+.vr-chat-launcher[aria-expanded="true"] .vr-chat-open-icon {
+  display: none;
+}
+
+.vr-chat-launcher[aria-expanded="true"] .vr-chat-close-icon {
+  display: inline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-chat-launcher {
+    transition: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .vr-chat-popup {
+    right: 0.5rem;
+    bottom: 5.25rem;
+    width: calc(100vw - 1rem);
   }
 
-  .bslib-grid.vr-home-grid > * {
-    grid-column: auto;
+  .vr-chat-launcher {
+    right: 1rem;
+    bottom: 1rem;
   }
 }
 
 /* Example prompts as a plain bullet list rather than shinychat's card grid.
-   That grid sizes its tracks from a minimum card width, which in a column this
-   narrow ends up wider than the column itself -- the horizontal scrollbar. A
-   normal list has no minimum, so it just wraps. The items stay clickable; only
-   the presentation changes. */
-.vr-chat-col {
-  --shiny-chat-suggestion-card-min-width: 0px;
-}
+   That grid sizes its tracks from a minimum card width, which in a popup this
+   narrow ends up wider than the popup itself. A normal list wraps cleanly. */
 
 .vr-chat-col .shiny-chat-suggestion-list {
   display: block;

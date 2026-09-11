@@ -164,14 +164,13 @@ dashboard_page <- tagList(
   .card_when_shown("links", external_links_ui("links"))
 )
 
-# Right column: bring-your-own-key chat, grounded in the current search via a
-# context tool (see server.R). It is pinned in view while the left column
-# scrolls (see the .vr-chat-col rule in www/css/app.css); the chat height is
-# viewport-relative so it fills the pinned column.
+# Floating bring-your-own-key chat, grounded in the current search via a context
+# tool (see server.R). Its viewport-relative height fits the popup defined in
+# app_ui.R and www/css/app.css.
 chat_panel <- byok_chat_ui(
   "chat",
   title = "Ask the assistant",
-  height = "calc(100vh - 9rem)",
+  height = "620px",
   # Widen the Model & key drawer so the provider/model controls have room.
   sidebar_width = 470,
   greeting = paste(
