@@ -3,7 +3,7 @@
 # fast, offline, format-level gate (biobouncer's "pattern" mode): it rejects
 # malformed identifiers up front so a network lookup is never fired on
 # obviously-bad input. It does not confirm the identifier exists; the resolving
-# APIs (MyGene, MyVariant) do that.
+# APIs (MyGene, ProtVar) do that.
 
 # Guard on biobouncer being available so the app degrades gracefully (skips the
 # gate rather than erroring) if the package is somehow absent.

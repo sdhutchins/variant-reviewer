@@ -1,12 +1,27 @@
 # Gene-or-variant search box. Returns a reactive carrying the submitted query so
 # the parent can fan it out to the result modules.
 
-# A coherent, well-supported example (BRAF V600E) that populates every card. Its
-# genomic HGVS identifies the V600E allele precisely, without the other alleles
-# sharing its rsID. Shared by the UI label and the server handler.
+# Representative formats that exercise the app's ProtVar normalization path.
+.gene_search_examples <- list(
+  protein_hgvs = list(
+    label = "Protein HGVS · TBC1D7 Pro267Ser",
+    variant = "NP_001305738.1:p.Pro267Ser"
+  ),
+  rsid = list(
+    label = "rsID · rs113488022",
+    variant = "rs113488022"
+  ),
+  genomic = list(
+    label = "Genomic · chr7:g.140453136A>T",
+    variant = "chr7:g.140453136A>T"
+  )
+)
+
+# The navbar Demo continues to use the protein HGVS example and its shorter
+# display name while sharing the exact value used by the matching pill.
 .gene_search_example <- list(
-  label = "BRAF V600E",
-  variant = "chr7:g.140453136A>T"
+  label = "TBC1D7 Pro267Ser",
+  variant = .gene_search_examples$protein_hgvs$variant
 )
 
 gene_search_ui <- function(id) {
@@ -59,14 +74,28 @@ gene_search_ui <- function(id) {
               "input['%s'] === 'variant'",
               ns("input_type")
             ),
-            textInput(
-              ns("variant"),
-              label = "Variant",
-              placeholder = "e.g. rs113488022 or chr7:g.140453136A>T",
-              width = "100%"
-            ),
-            uiOutput(ns("variant_match_ui"))
-          )
+            layout_columns(
+              col_widths = c(8, 4),
+              textInput(
+                ns("variant"),
+                label = "Variant",
+                placeholder = "e.g. NP_001305738.1:p.Pro267Ser",
+                width = "100%"
+              ),
+              selectInput(
+                ns("assembly"),
+                label = "Genome assembly",
+                choices = c(
+                  "Auto-detect" = "AUTO",
+                  "GRCh38" = "GRCh38",
+                  "GRCh37" = "GRCh37"
+                ),
+                selected = "AUTO",
+                width = "100%"
+              )
+            )
+          ),
+          uiOutput(ns("variant_match_ui"))
         ),
         div(
           class = "d-grid align-self-end mb-1",
@@ -80,16 +109,30 @@ gene_search_ui <- function(id) {
       ),
       tags$div(
         class = "small text-muted",
-        "Choose a gene symbol or enter a variant (rsID or HGVS)."
+        paste(
+          "Choose a gene symbol or enter one ProtVar-supported variant:",
+          "HGVS, VCF fields, genomic coordinates, UniProt protein notation,",
+          "gnomAD, dbSNP, ClinVar, or COSMIC ID."
+        )
       ),
-      # One-click example so a first-time visitor can see a populated dashboard
-      # without knowing a gene/variant off-hand.
+      # Format-specific examples fill the form but preserve Review as the only
+      # action that starts external API requests.
       tags$div(
-        class = "small text-muted",
-        "Not sure where to start? ",
-        actionLink(
-          ns("example"),
-          paste0("Load an example (", .gene_search_example$label, ")")
+        class = paste(
+          "small text-muted d-flex flex-wrap align-items-center",
+          "gap-2 mt-2"
+        ),
+        tags$span("Try an example:"),
+        lapply(
+          names(.gene_search_examples),
+          function(example_id) {
+            example <- .gene_search_examples[[example_id]]
+            actionLink(
+              ns(paste0("example_", example_id)),
+              example$label,
+              class = "vr-example-pill"
+            )
+          }
         )
       ),
       # Inline validation feedback: shown when the gene/variant fails the
@@ -99,8 +142,8 @@ gene_search_ui <- function(id) {
   )
 }
 
-# Returns a reactive carrying list(gene = <chr>, variant = <chr|NULL>), or NULL
-# before the first submit (and when the gene is blank). A reactiveVal is used
+# Returns a reactive carrying list(gene, variant, protvar), or NULL before the
+# first submit (and when the gene is blank). A reactiveVal is used
 # instead of eventReactive so reading it before any submit yields NULL rather
 # than a silent error, which lets the result cards show their initial
 # placeholder messages.
@@ -170,39 +213,53 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
 
     output$variant_match_ui <- renderUI({
       resolved <- variant_matches()
-      if (is.null(resolved) || nrow(resolved$matches) <= 1) {
+      choices <- resolved$mappings
+      if (is.null(resolved) || is.null(choices) || nrow(choices) <= 1) {
         return(NULL)
       }
       tagList(
         selectInput(
           session$ns("variant_match"),
-          "Select the matching variant",
+          "Select the matching variant or residue",
           choices = c(
             "Choose a match" = "",
-            stats::setNames(resolved$matches$id, resolved$matches$label)
+            stats::setNames(choices$id, choices$label)
           ),
           selected = "",
           width = "100%"
         ),
         tags$div(
           class = "small text-muted",
-          "This entry matches more than one genomic allele."
+          "ProtVar returned more than one distinct canonical mapping."
         )
       )
     })
 
     # Hide a previous match list as soon as the user changes the variant text.
-    observeEvent(input$variant, {
-      resolved <- variant_matches()
-      if (!is.null(resolved) &&
-          !identical(trimws(input$variant %||% ""), resolved$term)) {
+    observeEvent(
+      input$variant,
+      {
+        resolved <- variant_matches()
+        if (
+          !is.null(resolved) &&
+            !identical(trimws(input$variant %||% ""), resolved$term)
+        ) {
+          variant_matches(NULL)
+        }
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      list(input$gene_variant, input$assembly),
+      {
         variant_matches(NULL)
-      }
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
     # The one place a query is published. Gates every downstream API call on a
     # format-level check of the inputs, so a malformed gene/variant is caught
     # here rather than firing failing lookups across the cards.
-    submit_query <- function(gene, variant) {
+    submit_query <- function(gene, variant, protvar = NULL, assembly = "AUTO") {
       check <- vr_validate_query(gene, if (variant == "") NULL else variant)
       if (!isTRUE(check$ok)) {
         validation(check$errors)
@@ -212,23 +269,39 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       validation(NULL)
       query(list(
         gene = gene,
-        variant = if (variant == "") NULL else variant
+        variant = if (variant == "") NULL else variant,
+        protvar = protvar,
+        assembly = assembly
       ))
       invisible(TRUE)
     }
 
-    resolve_variant <- function(variant) {
+    resolve_variant <- function(variant, gene = "") {
+      assembly <- input$assembly %||% "AUTO"
       previous <- variant_matches()
-      if (!is.null(previous) && identical(previous$term, variant)) {
+      if (
+        !is.null(previous) &&
+          identical(previous$term, variant) &&
+          identical(previous$requested_assembly, assembly)
+      ) {
         selected <- trimws(input$variant_match %||% "")
         if (!nzchar(selected)) {
           validation("Select one of the matching variants.")
           query(NULL)
           return(invisible(FALSE))
         }
-        updateTextInput(session, "variant", value = selected)
+        mapping <- previous$mappings[
+          previous$mappings$id == selected,
+          ,
+          drop = FALSE
+        ]
         variant_matches(NULL)
-        return(submit_query("", selected))
+        return(submit_query(
+          gene,
+          variant,
+          protvar = protvar_mapping_record(mapping),
+          assembly = previous$assembly %||% assembly
+        ))
       }
 
       check <- vr_validate_variant(variant)
@@ -237,17 +310,23 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
         query(NULL)
         return(invisible(FALSE))
       }
-      resolved <- myvariant_find_matches(variant)
+      resolved <- protvar_find_mappings(variant, assembly = assembly)
       if (!isTRUE(resolved$ok)) {
         validation(resolved$error)
         query(NULL)
         return(invisible(FALSE))
       }
-      if (nrow(resolved$matches) == 1) {
+      if (nrow(resolved$mappings) == 1) {
         variant_matches(NULL)
-        return(submit_query("", variant))
+        return(submit_query(
+          gene,
+          variant,
+          protvar = protvar_mapping_record(resolved$mappings),
+          assembly = resolved$assembly %||% assembly
+        ))
       }
       resolved$term <- variant
+      resolved$requested_assembly <- assembly
       variant_matches(resolved)
       validation(NULL)
       query(NULL)
@@ -259,10 +338,13 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       if (identical(input_type, "variant")) {
         resolve_variant(trimws(input$variant %||% ""))
       } else {
-        submit_query(
-          trimws(input$gene %||% ""),
-          trimws(input$gene_variant %||% "")
-        )
+        gene <- trimws(input$gene %||% "")
+        variant <- trimws(input$gene_variant %||% "")
+        if (nzchar(variant)) {
+          resolve_variant(variant, gene)
+        } else {
+          submit_query(gene, "")
+        }
       }
     })
 
@@ -314,15 +396,21 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
       )
     })
 
-    # Fill the variant input with the example but leave submitting to the user,
-    # so they can review or change it before clicking Review. Variant mode
-    # matches the worked example loaded by the navbar Demo.
-    observeEvent(input$example, {
-      updateRadioButtons(session, "input_type", selected = "variant")
-      updateTextInput(session, "gene", value = "")
-      updateTextInput(session, "variant", value = .gene_search_example$variant)
-      variant_matches(NULL)
-    })
+    # Each pill fills the same variant-mode controls. The loop creates one
+    # observer per example while keeping the submit boundary unchanged.
+    for (example_id in names(.gene_search_examples)) {
+      local({
+        current_id <- example_id
+        observeEvent(input[[paste0("example_", current_id)]], {
+          example <- .gene_search_examples[[current_id]]
+          updateRadioButtons(session, "input_type", selected = "variant")
+          updateTextInput(session, "gene", value = "")
+          updateTextInput(session, "variant", value = example$variant)
+          validation(NULL)
+          variant_matches(NULL)
+        })
+      })
+    }
 
     query
   })
