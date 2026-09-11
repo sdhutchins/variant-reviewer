@@ -340,6 +340,14 @@ test_that("myvariant_predictions() rejects non-queryable input", {
   expect_match(res$error, "rsID")
 })
 
+test_that("myvariant_query_term() quotes HGVS but not rsIDs", {
+  expect_identical(myvariant_query_term("rs113488022"), "rs113488022")
+  expect_identical(
+    myvariant_query_term("chr7:g.140453136A>T"),
+    '"chr7:g.140453136A>T"'
+  )
+})
+
 test_that("myvariant_parse_gene_variants() builds a ranked variant table", {
   hits <- read_fixture("myvariant_gene_variants_braf.json")$hits
   res <- myvariant_parse_gene_variants(hits)

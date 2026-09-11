@@ -15,6 +15,13 @@ myvariant_is_queryable <- function(variant) {
     grepl(":", term, fixed = TRUE)
 }
 
+# Quote HGVS values so MyVariant does not interpret the colon as query syntax.
+# rsIDs contain no reserved query characters and remain unchanged.
+myvariant_query_term <- function(variant) {
+  term <- trimws(as.character(variant))
+  if (grepl(":", term, fixed = TRUE)) sprintf('"%s"', term) else term
+}
+
 # Returns:
 #   list(ok = TRUE, id, rsid, gene, hgvsp, cadd_phred, clinvar_significance)
 #   list(ok = FALSE, error = "...")
@@ -34,7 +41,7 @@ myvariant_annotate <- function(variant) {
     MYVARIANT_BASE,
     path = "query",
     query = list(
-      q = term,
+      q = myvariant_query_term(term),
       size = 1,
       fields = paste(
         "dbsnp.rsid",
@@ -94,7 +101,7 @@ myvariant_predictions <- function(variant) {
     MYVARIANT_BASE,
     path = "query",
     query = list(
-      q = term,
+      q = myvariant_query_term(term),
       size = 1,
       fields = paste(
         "cadd.phred",
@@ -245,7 +252,7 @@ myvariant_conservation <- function(variant) {
   res <- vr_api_get(
     MYVARIANT_BASE,
     path = "query",
-    query = list(q = term, size = 1, fields = "dbnsfp"),
+    query = list(q = myvariant_query_term(term), size = 1, fields = "dbnsfp"),
     source = "MyVariant"
   )
   if (!res$ok) {
