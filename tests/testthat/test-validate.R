@@ -32,6 +32,15 @@ test_that("vr_validate_variant checks rsIDs but passes other forms through", {
   # Non-rsID forms are passed through for the annotation API to resolve.
   expect_true(vr_validate_variant("R175H")$ok)
   expect_true(vr_validate_variant("NM_004333.4:c.1799T>A")$ok)
+  expect_true(
+    vr_validate_variant(
+      "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)"
+    )$ok
+  )
+
+  bad_hgvs <- vr_validate_variant("COG4(NM_015386.3):c.not-a-variant")
+  expect_false(bad_hgvs$ok)
+  expect_match(bad_hgvs$error, "valid coding HGVS")
 })
 
 test_that("vr_validate_query collects errors from both fields", {

@@ -34,14 +34,29 @@ vr_validate_gene <- function(gene) {
   list(ok = TRUE)
 }
 
-# Validate a variant identifier. Only rsIDs are format-checked (against the
-# dbSNP grammar); other accepted forms (HGVS, protein shorthand like R175H) are
-# passed through for the annotation API to resolve. A blank variant is allowed
-# (the variant is optional). Returns list(ok, error) as above.
+# Validate a variant identifier. rsIDs and recognized compound coding HGVS are
+# format-checked; other accepted forms are passed through for the annotation API
+# to resolve. A blank variant is allowed because the variant is optional.
+# Returns list(ok, error) as above.
 vr_validate_variant <- function(variant) {
   variant <- trimws(as.character(variant %||% ""))
   if (!nzchar(variant)) {
     return(list(ok = TRUE))
+  }
+  normalized <- vr_normalize_variant_input(variant)
+  if (.vr_has_biobouncer() && isTRUE(normalized$recognized)) {
+    valid <- isTRUE(
+      biobouncer::is_valid_id(normalized$lookup, "hgvs", how = "pattern")
+    )
+    if (!valid) {
+      return(list(
+        ok = FALSE,
+        error = sprintf(
+          "“%s” does not contain a valid coding HGVS description.",
+          variant
+        )
+      ))
+    }
   }
   looks_like_rsid <- grepl("^rs", variant, ignore.case = TRUE)
   if (.vr_has_biobouncer() && looks_like_rsid) {

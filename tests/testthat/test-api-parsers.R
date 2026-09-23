@@ -144,6 +144,38 @@ test_that("ProtVar accepts UCSC-style chromosome HGVS through its normalizer", {
   )
 })
 
+test_that("compound clinical notation is normalized to transcript HGVS", {
+  result <- vr_normalize_variant_input(
+    "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)"
+  )
+
+  expect_true(result$recognized)
+  expect_identical(result$lookup, "NM_015386.3:c.1750del")
+  expect_identical(result$gene, "COG4")
+  expect_identical(result$transcript, "NM_015386.3")
+  expect_identical(result$hgvsp, "p.(Glu584SerfsTer29)")
+})
+
+test_that("unrecognized variant notation retains its original lookup term", {
+  result <- vr_normalize_variant_input("rs113488022")
+
+  expect_false(result$recognized)
+  expect_identical(result$lookup, "rs113488022")
+})
+
+test_that("normalized compound notation builds a variant annotation", {
+  normalized <- vr_normalize_variant_input(
+    "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)"
+  )
+  result <- vr_input_variant_annotation(normalized)
+
+  expect_true(result$ok)
+  expect_identical(result$id, "NM_015386.3:c.1750del")
+  expect_identical(result$gene, "COG4")
+  expect_identical(result$hgvsp, "p.(Glu584SerfsTer29)")
+  expect_length(result$sources, 0L)
+})
+
 test_that("ProtVar parsing exposes distinct canonical candidates only", {
   candidate <- function(accession, position, canonical) {
     list(
