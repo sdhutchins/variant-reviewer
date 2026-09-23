@@ -259,7 +259,13 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
     # The one place a query is published. Gates every downstream API call on a
     # format-level check of the inputs, so a malformed gene/variant is caught
     # here rather than firing failing lookups across the cards.
-    submit_query <- function(gene, variant, protvar = NULL, assembly = "AUTO") {
+    submit_query <- function(
+      gene,
+      variant,
+      protvar = NULL,
+      normalized = NULL,
+      assembly = "AUTO"
+    ) {
       check <- vr_validate_query(gene, if (variant == "") NULL else variant)
       if (!isTRUE(check$ok)) {
         validation(check$errors)
@@ -271,6 +277,7 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
         gene = gene,
         variant = if (variant == "") NULL else variant,
         protvar = protvar,
+        normalized = normalized,
         assembly = assembly
       ))
       invisible(TRUE)
@@ -300,6 +307,7 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
           gene,
           variant,
           protvar = protvar_mapping_record(mapping),
+          normalized = previous$normalized,
           assembly = previous$assembly %||% assembly
         ))
       }
@@ -310,8 +318,23 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
         query(NULL)
         return(invisible(FALSE))
       }
-      resolved <- protvar_find_mappings(variant, assembly = assembly)
+      normalized <- vr_normalize_variant_input(variant)
+      resolved <- protvar_find_mappings(
+        normalized$lookup,
+        assembly = assembly
+      )
       if (!isTRUE(resolved$ok)) {
+        # A recognized compound HGVS description remains useful even when its
+        # consequence type is outside ProtVar's missense-focused mappings.
+        if (isTRUE(normalized$recognized)) {
+          variant_matches(NULL)
+          return(submit_query(
+            gene,
+            variant,
+            normalized = normalized,
+            assembly = assembly
+          ))
+        }
         validation(resolved$error)
         query(NULL)
         return(invisible(FALSE))
@@ -322,10 +345,12 @@ gene_search_server <- function(id, requested = reactiveVal(NULL)) {
           gene,
           variant,
           protvar = protvar_mapping_record(resolved$mappings),
+          normalized = normalized,
           assembly = resolved$assembly %||% assembly
         ))
       }
       resolved$term <- variant
+      resolved$normalized <- normalized
       resolved$requested_assembly <- assembly
       variant_matches(resolved)
       validation(NULL)

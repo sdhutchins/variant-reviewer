@@ -48,7 +48,9 @@ function(input, output, session) {
     if (is.null(query) || is_blank(query$variant)) {
       return(NULL)
     }
-    normalized <- query$protvar$normalized_hgvs %||% NA_character_
+    normalized <- query$protvar$normalized_hgvs %||%
+      query$normalized$lookup %||%
+      NA_character_
     term <- if (is_blank(normalized)) query$variant else normalized
     myvariant_annotate(term)
   })
@@ -56,8 +58,8 @@ function(input, output, session) {
   # Work out which gene the dashboard is about and whether the inputs conflict.
   # A search can be gene-only, variant-only, or both:
   #   * gene present            -> that is the gene.
-  #   * variant only            -> the gene ProtVar mapped, so a lone variant fills the
-  #                                gene-level cards.
+  #   * variant only            -> the gene from normalization or annotation,
+  #                                so a lone variant fills the gene-level cards.
   #   * both, naming different genes -> a mismatch, which blocks the search.
   gene_context <- reactive({
     query <- search()
@@ -67,7 +69,9 @@ function(input, output, session) {
     has_gene <- !is_blank(query$gene)
     has_variant <- !is_blank(query$variant)
     ann <- if (has_variant) annotation_raw() else NULL
-    variant_gene <- query$protvar$gene %||% NULL
+    variant_gene <- query$protvar$gene %||%
+      query$normalized$gene %||%
+      NULL
     if (is_blank(variant_gene) && isTRUE(ann$ok)) {
       variant_gene <- ann$gene
     }
@@ -123,12 +127,16 @@ function(input, output, session) {
     if (is_blank(query$variant)) {
       return(NULL)
     }
-    protvar_variant_annotation(
-      query$protvar,
-      query$variant,
-      annotation_raw(),
-      protvar_metadata()
-    )
+    if (is.null(query$protvar) && isTRUE(query$normalized$recognized)) {
+      vr_input_variant_annotation(query$normalized, annotation_raw())
+    } else {
+      protvar_variant_annotation(
+        query$protvar,
+        query$variant,
+        annotation_raw(),
+        protvar_metadata()
+      )
+    }
   })
 
   # The dbSNP rsID drives services that do not accept ProtVar's normalized

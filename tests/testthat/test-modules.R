@@ -71,6 +71,38 @@ test_that("protein HGVS search uses one canonical ProtVar mapping", {
   })
 })
 
+test_that("compound coding HGVS remains searchable without a ProtVar mapping", {
+  requested_variant <- NULL
+  original <- protvar_find_mappings
+  protvar_find_mappings <<- function(variant, ...) {
+    requested_variant <<- variant
+    list(ok = FALSE, error = "No ProtVar mapping.")
+  }
+  on.exit(protvar_find_mappings <<- original, add = TRUE)
+
+  testServer(gene_search_server, {
+    session$setInputs(
+      input_type = "variant",
+      variant = "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)",
+      submit = 1
+    )
+    query <- session$returned()
+
+    expect_identical(requested_variant, "NM_015386.3:c.1750del")
+    expect_identical(
+      query$variant,
+      paste0(
+        "COG4(NM_015386.3):c.1750del ",
+        "p.(Glu584SerfsTer29)"
+      )
+    )
+    expect_null(query$protvar)
+    expect_true(query$normalized$recognized)
+    expect_identical(query$normalized$gene, "COG4")
+    expect_identical(query$normalized$hgvsc, "NM_015386.3:c.1750del")
+  })
+})
+
 test_that("protein HGVS search asks only for distinct canonical mappings", {
   original <- protvar_find_mappings
   protvar_find_mappings <<- function(variant, ...) {

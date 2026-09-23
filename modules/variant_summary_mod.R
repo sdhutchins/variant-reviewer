@@ -1,5 +1,5 @@
-# Variant summary card. ProtVar supplies the normalized identity and MyVariant
-# enriches fields it can resolve for the selected allele.
+# Variant summary card. The normalized input or ProtVar supplies the identity,
+# and MyVariant enriches fields it can resolve for the selected allele.
 
 variant_summary_ui <- function(id) {
   vr_result_card(id, "Variant", "120px", copy = TRUE)
@@ -17,10 +17,13 @@ variant_summary_server <- function(id, annotation, retry_annotation) {
     output$source <- renderUI({
       res <- annotation()
       req(!is.null(res), isTRUE(res$ok))
+      sources <- res$sources %||% character()
       tags$span(
         class = "d-inline-flex align-items-center gap-2",
-        vr_source_link("https://www.ebi.ac.uk/ProtVar/", "ProtVar"),
-        if ("MyVariant" %in% (res$sources %||% character())) {
+        if ("ProtVar" %in% sources) {
+          vr_source_link("https://www.ebi.ac.uk/ProtVar/", "ProtVar")
+        },
+        if ("MyVariant" %in% sources) {
           vr_source_link("https://myvariant.info/", "MyVariant")
         }
       )
