@@ -197,6 +197,12 @@ src_ensembl_variant <- function(identifier) {
       parts[[4]],
       "?content-type=application/json"
     )
+  } else if (grepl(":[cgmnpr]\\.", identifier)) {
+    paste0(
+      "https://rest.ensembl.org/vep/human/hgvs/",
+      utils::URLencode(identifier, reserved = TRUE),
+      "?content-type=application/json"
+    )
   } else {
     paste0(
       "https://www.ensembl.org/Homo_sapiens/Variation/Explore?v=",

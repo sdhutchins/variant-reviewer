@@ -3,7 +3,7 @@
 
 ENSEMBL_BASE <- "https://rest.ensembl.org"
 
-# Run VEP for a dbSNP rsID or ProtVar's normalized GRCh38 variant ID.
+# Run VEP for a dbSNP rsID, transcript HGVS, or normalized GRCh38 variant ID.
 # Returns:
 #   list(ok = TRUE, most_severe, assembly,
 #        data = data.frame(gene, transcript, consequence, impact, sift, polyphen))
@@ -17,11 +17,17 @@ ensembl_vep <- function(identifier, rsid = NULL) {
   is_variant_id <- length(parts) == 4 &&
     grepl("^[0-9]+$", parts[[2]]) &&
     grepl("^[ACGT]+$", parts[[4]], ignore.case = TRUE)
+  is_hgvs <- grepl(
+    "^[A-Za-z]{2}_[0-9]+(\\.[0-9]+)?:[cgmnpr]\\.",
+    identifier
+  )
   path <- if (is_variant_id && !is_blank(rsid)) {
     paste0("vep/human/id/", rsid)
   } else if (is_variant_id) {
     region <- paste0(parts[[1]], ":", parts[[2]], "-", parts[[2]], ":1")
     paste0("vep/human/region/", region, "/", parts[[4]])
+  } else if (is_hgvs) {
+    paste0("vep/human/hgvs/", identifier)
   } else {
     paste0("vep/human/id/", identifier)
   }

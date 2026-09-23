@@ -176,6 +176,19 @@ function(input, output, session) {
     }
   })
 
+  # VEP accepts transcript HGVS directly, so non-missense coding variants can
+  # still receive consequence annotation without a ProtVar genomic mapping.
+  variant_vep_id <- reactive({
+    query <- search_effective()
+    if (!is.null(query) && !is_blank(query$protvar$genomic)) {
+      query$protvar$genomic
+    } else if (!is.null(query) && !is_blank(query$normalized$lookup)) {
+      query$normalized$lookup
+    } else {
+      variant_rsid()
+    }
+  })
+
   # Block, rather than just warn, when a typed gene and the variant disagree: the
   # cards stay empty and this explains why. A lone variant is never a mismatch
   # (its gene is used), so this only fires when both were entered.
@@ -239,7 +252,7 @@ function(input, output, session) {
   gnomad_result <- gnomad_server("gnomad", variant_genomic_id)
   gnomad_data <- gnomad_result$data
   constraint_data <- gene_constraint_server("constraint", resolved)
-  ensembl_data <- ensembl_server("ensembl", variant_genomic_id, variant_rsid)
+  ensembl_data <- ensembl_server("ensembl", variant_vep_id, variant_rsid)
   gtex_data <- gtex_expression_server("gtex", resolved)
   string_data <- string_ppi_server("string_ppi", resolved)
   opentargets_data <- opentargets_server("opentargets", resolved)

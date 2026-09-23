@@ -34,6 +34,11 @@ test_that("source URL builders return the expected links", {
     src_ensembl_variant("6-13305184-G-A"),
     "region/6:13305184-13305184:1/A"
   )
+  expect_match(
+    src_ensembl_variant("NM_015386.3:c.1750del"),
+    "hgvs/NM_015386.3%3Ac.1750del",
+    fixed = TRUE
+  )
   expect_match(src_clinvar_variation("40389"), "clinvar/variation/40389/$")
   expect_equal(
     src_monarch_gene("11998"),

@@ -471,6 +471,31 @@ test_that("Ensembl VEP uses its allele-specific GRCh38 region endpoint", {
   )
 })
 
+test_that("Ensembl VEP sends transcript HGVS to its HGVS endpoint", {
+  requested_path <- NULL
+  original <- vr_api_get
+  vr_api_get <<- function(base_url, path, query, source, ...) {
+    requested_path <<- path
+    list(
+      ok = TRUE,
+      data = list(list(
+        most_severe_consequence = "frameshift_variant",
+        assembly_name = "GRCh38",
+        transcript_consequences = list()
+      ))
+    )
+  }
+  on.exit(vr_api_get <<- original, add = TRUE)
+
+  result <- ensembl_vep("NM_015386.3:c.1750del")
+
+  expect_true(result$ok)
+  expect_identical(
+    requested_path,
+    "vep/human/hgvs/NM_015386.3:c.1750del"
+  )
+})
+
 test_that("Ensembl VEP filters an rsID response to the selected allele", {
   record <- list(
     most_severe_consequence = "missense_variant",
