@@ -215,6 +215,29 @@ test_that("prediction downloads use plain table values", {
   expect_true(is.na(additional$Score[2]))
 })
 
+test_that("additional predictions use normalized compound HGVS", {
+  requested_variant <- NULL
+  original <- myvariant_predictions
+  myvariant_predictions <<- function(variant, ...) {
+    requested_variant <<- variant
+    list(ok = FALSE, error = "No prediction data.")
+  }
+  on.exit(myvariant_predictions <<- original, add = TRUE)
+
+  query <- reactive(list(
+    variant = "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)",
+    protvar = NULL,
+    normalized = vr_normalize_variant_input(
+      "COG4(NM_015386.3):c.1750del p.(Glu584SerfsTer29)"
+    )
+  ))
+
+  testServer(predictions_server, args = list(search = query), {
+    expect_no_error(output$content)
+    expect_identical(requested_variant, "NM_015386.3:c.1750del")
+  })
+})
+
 test_that("gene_search_server is NULL before submit, emits the query after", {
   testServer(gene_search_server, {
     # Before any submit the value is NULL (not an error), so result cards can

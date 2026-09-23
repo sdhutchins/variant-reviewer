@@ -31,7 +31,9 @@ predictions_server <- function(id, search) {
       if (is.null(query) || is_blank(query$variant)) {
         return(NULL)
       }
-      normalized <- query$protvar$normalized_hgvs %||% NA_character_
+      normalized <- query$protvar$normalized_hgvs %||%
+        query$normalized$lookup %||%
+        NA_character_
       term <- if (is_blank(normalized)) query$variant else normalized
       myvariant_predictions(term)
     })
